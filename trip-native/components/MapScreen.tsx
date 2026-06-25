@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Keyboard, Modal, FlatList, SafeAreaView,
+  ActivityIndicator, Keyboard, Modal, FlatList,
 } from 'react-native'
 import MapView, { Marker, Callout, MapPressEvent, Region } from 'react-native-maps'
 import { GOOGLE_MAPS_API_KEY, COLORS } from '../constants'
@@ -32,19 +32,31 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   const mapRef = useRef<MapView>(null)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [region, setRegion] = useState<Region>(INITIAL_REGION)
   const [results, setResults] = useState<SearchResult[]>([])
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
+
+  const parseResults = (items: any[]): SearchResult[] =>
+    items.map((r: any) => ({
+      name: r.name ?? '',
+      address: r.formatted_address ?? '',
+      lat: r.geometry.location.lat,
+      lng: r.geometry.location.lng,
+    }))
 
   const handleSearch = async () => {
     if (!query.trim()) return
     Keyboard.dismiss()
     setSearching(true)
     setErrorMsg('')
+    setResults([])
+    setNextPageToken(null)
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query.trim())}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query.trim())}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
 
@@ -53,19 +65,37 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
         return
       }
 
-      const parsed: SearchResult[] = data.results.slice(0, 5).map((r: any) => ({
-        name: r.address_components?.[0]?.long_name ?? query,
-        address: r.formatted_address ?? '',
-        lat: r.geometry.location.lat,
-        lng: r.geometry.location.lng,
-      }))
-
-      setResults(parsed)
+      setResults(parseResults(data.results))
+      setNextPageToken(data.next_page_token ?? null)
       setShowModal(true)
     } catch (e: any) {
       setErrorMsg(`에러: ${e?.message ?? '알 수 없는 오류'}`)
     } finally {
       setSearching(false)
+    }
+  }
+
+  const handleLoadMore = async () => {
+    if (!nextPageToken || loadingMore) return
+    setLoadingMore(true)
+
+    try {
+      // next_page_token은 발급 후 2초 대기 필요
+      await new Promise((r) => setTimeout(r, 2000))
+      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=${nextPageToken}&key=${GOOGLE_MAPS_API_KEY}`
+      const res = await fetch(url)
+      const data = await res.json()
+
+      if (data.status === 'OK' && data.results?.length) {
+        setResults((prev) => [...prev, ...parseResults(data.results)])
+        setNextPageToken(data.next_page_token ?? null)
+      } else {
+        setNextPageToken(null)
+      }
+    } catch {
+      setNextPageToken(null)
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -172,9 +202,23 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
             <FlatList
               data={results}
               keyExtractor={(_, i) => String(i)}
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.3}
+              ListFooterComponent={
+                loadingMore ? (
+                  <View style={styles.loadingMore}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                    <Text style={styles.loadingMoreText}>더 불러오는 중...</Text>
+                  </View>
+                ) : nextPageToken ? (
+                  <View style={styles.loadingMore}>
+                    <Text style={styles.loadingMoreText}>스크롤해서 더 보기</Text>
+                  </View>
+                ) : null
+              }
               renderItem={({ item, index }) => (
                 <TouchableOpacity
-                  style={[styles.resultItem, index === results.length - 1 && styles.resultItemLast]}
+                  style={[styles.resultItem, index === results.length - 1 && !nextPageToken && styles.resultItemLast]}
                   onPress={() => handleSelectResult(item)}
                   activeOpacity={0.7}
                 >
@@ -276,4 +320,15 @@ const styles = StyleSheet.create({
   resultName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   resultAddress: { fontSize: 11, color: COLORS.textSub },
   resultArrow: { fontSize: 20, color: '#D0D0D0', fontWeight: '300' },
+  loadingMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  loadingMoreText: {
+    fontSize: 12,
+    color: COLORS.textSub,
+  },
 })
