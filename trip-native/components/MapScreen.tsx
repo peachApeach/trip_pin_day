@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Keyboard,
+  ActivityIndicator, Keyboard, Alert,
 } from 'react-native'
-import MapView, { Marker, Callout, MapPressEvent } from 'react-native-maps'
+import MapView, { Marker, Callout, MapPressEvent, Region } from 'react-native-maps'
 import { GOOGLE_MAPS_API_KEY, COLORS } from '../constants'
 import type { Place } from '../types'
 
@@ -25,40 +25,39 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   const mapRef = useRef<MapView>(null)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
-  const [notFound, setNotFound] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+  const [region, setRegion] = useState<Region>(INITIAL_REGION)
 
   const handleSearch = async () => {
     if (!query.trim()) return
     Keyboard.dismiss()
     setSearching(true)
-    setNotFound(false)
+    setErrorMsg('')
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query.trim())}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
-      const result = data.results?.[0]
 
-      if (!result) {
-        setNotFound(true)
+      if (data.status !== 'OK' || !data.results?.[0]) {
+        setErrorMsg(`검색 실패: ${data.status}`)
         return
       }
 
-      const lat: number = result.geometry.location.lat
-      const lng: number = result.geometry.location.lng
-      const name: string = result.address_components?.[0]?.long_name ?? query
-      const address: string = result.formatted_address ?? ''
+      const lat: number = data.results[0].geometry.location.lat
+      const lng: number = data.results[0].geometry.location.lng
 
-      mapRef.current?.animateToRegion({
+      const newRegion: Region = {
         latitude: lat,
         longitude: lng,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
-      }, 600)
-
+      }
+      setRegion(newRegion)
+      mapRef.current?.animateToRegion(newRegion, 600)
       setQuery('')
-    } catch {
-      setNotFound(true)
+    } catch (e: any) {
+      setErrorMsg(`에러: ${e?.message ?? '알 수 없는 오류'}`)
     } finally {
       setSearching(false)
     }
@@ -84,7 +83,8 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        initialRegion={INITIAL_REGION}
+        region={region}
+        onRegionChangeComplete={setRegion}
         onPress={handleMapPress}
         showsUserLocation
         showsMyLocationButton
@@ -116,14 +116,14 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
             placeholder="장소 검색 후 엔터"
             placeholderTextColor="#bbb"
             value={query}
-            onChangeText={(text) => { setQuery(text); setNotFound(false) }}
+            onChangeText={(text) => { setQuery(text); setErrorMsg('') }}
             returnKeyType="search"
             onSubmitEditing={handleSearch}
           />
           {searching
             ? <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 4 }} />
             : !!query && (
-              <TouchableOpacity onPress={() => { setQuery(''); setNotFound(false) }} style={styles.clearBtn}>
+              <TouchableOpacity onPress={() => { setQuery(''); setErrorMsg('') }} style={styles.clearBtn}>
                 <Text style={styles.clearText}>✕</Text>
               </TouchableOpacity>
             )
@@ -132,7 +132,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
             <Text style={styles.searchBtnText}>이동</Text>
           </TouchableOpacity>
         </View>
-        {notFound && <Text style={styles.notFoundText}>검색 결과가 없어요</Text>}
+        {!!errorMsg && <Text style={styles.notFoundText}>{errorMsg}</Text>}
       </View>
     </View>
   )
