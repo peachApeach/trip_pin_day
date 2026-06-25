@@ -1,9 +1,9 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  FlatList, ActivityIndicator, Keyboard,
+  ActivityIndicator, Keyboard,
 } from 'react-native'
-import MapView, { Marker, Callout, MapPressEvent, Region } from 'react-native-maps'
+import MapView, { Marker, Callout, MapPressEvent } from 'react-native-maps'
 import { GOOGLE_MAPS_API_KEY, COLORS } from '../constants'
 import type { Place } from '../types'
 
@@ -12,14 +12,6 @@ interface Props {
   selectedPlaceId: number | null
   onMapPress: (info: { lat: number; lng: number; name: string; address: string }) => void
   onMarkerPress: (id: number) => void
-}
-
-interface Prediction {
-  place_id: string
-  structured_formatting: {
-    main_text: string
-    secondary_text: string
-  }
 }
 
 const INITIAL_REGION = {
@@ -31,67 +23,48 @@ const INITIAL_REGION = {
 
 export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarkerPress }: Props) {
   const mapRef = useRef<MapView>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
   const [query, setQuery] = useState('')
-  const [predictions, setPredictions] = useState<Prediction[]>([])
   const [searching, setSearching] = useState(false)
+  const [notFound, setNotFound] = useState(false)
 
-  const fetchPredictions = useCallback((text: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (!text.trim()) {
-      setPredictions([])
-      return
-    }
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
-        const res = await fetch(url)
-        const data = await res.json()
-        setPredictions(data.predictions ?? [])
-      } catch {
-        setPredictions([])
-      } finally {
-        setSearching(false)
-      }
-    }, 400)
-  }, [])
-
-  const handleSelectPlace = async (prediction: Prediction) => {
+  const handleSearch = async () => {
+    if (!query.trim()) return
     Keyboard.dismiss()
-    setQuery(prediction.structured_formatting.main_text)
-    setPredictions([])
+    setSearching(true)
+    setNotFound(false)
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=geometry,name,formatted_address&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
-      const result = data.result
+      const result = data.results?.[0]
+
+      if (!result) {
+        setNotFound(true)
+        return
+      }
+
       const lat: number = result.geometry.location.lat
       const lng: number = result.geometry.location.lng
-      const name: string = result.name ?? prediction.structured_formatting.main_text
-      const address: string = result.formatted_address ?? prediction.structured_formatting.secondary_text
+      const name: string = result.address_components?.[0]?.long_name ?? query
+      const address: string = result.formatted_address ?? ''
 
       mapRef.current?.animateToRegion({
         latitude: lat,
         longitude: lng,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
-      }, 500)
+      }, 600)
 
-      onMapPress({ lat, lng, name, address })
       setQuery('')
     } catch {
-      setPredictions([])
+      setNotFound(true)
+    } finally {
+      setSearching(false)
     }
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
-    if (predictions.length > 0) {
-      setPredictions([])
-      return
-    }
     const { latitude, longitude } = e.nativeEvent.coordinate
     try {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
@@ -104,12 +77,6 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
     } catch {
       onMapPress({ lat: latitude, lng: longitude, name: '선택한 장소', address: '' })
     }
-  }
-
-  const clearSearch = () => {
-    setQuery('')
-    setPredictions([])
-    Keyboard.dismiss()
   }
 
   return (
@@ -142,53 +109,30 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
 
       {/* 검색창 */}
       <View style={styles.searchWrapper}>
-        <View style={styles.searchBox}>
+        <View style={[styles.searchBox, notFound && styles.searchBoxError]}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="장소 검색"
+            placeholder="장소 검색 후 엔터"
             placeholderTextColor="#bbb"
             value={query}
-            onChangeText={(text) => {
-              setQuery(text)
-              fetchPredictions(text)
-            }}
+            onChangeText={(text) => { setQuery(text); setNotFound(false) }}
             returnKeyType="search"
-            clearButtonMode="never"
+            onSubmitEditing={handleSearch}
           />
-          {searching && <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 8 }} />}
-          {!!query && !searching && (
-            <TouchableOpacity onPress={clearSearch} style={styles.clearBtn}>
-              <Text style={styles.clearText}>✕</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {predictions.length > 0 && (
-          <FlatList
-            data={predictions}
-            keyExtractor={(item) => item.place_id}
-            style={styles.predictionList}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item, index }) => (
-              <TouchableOpacity
-                style={[styles.predictionItem, index === predictions.length - 1 && styles.predictionItemLast]}
-                onPress={() => handleSelectPlace(item)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.predictionIcon}>📍</Text>
-                <View style={styles.predictionTexts}>
-                  <Text style={styles.predictionMain} numberOfLines={1}>
-                    {item.structured_formatting.main_text}
-                  </Text>
-                  <Text style={styles.predictionSub} numberOfLines={1}>
-                    {item.structured_formatting.secondary_text}
-                  </Text>
-                </View>
+          {searching
+            ? <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 4 }} />
+            : !!query && (
+              <TouchableOpacity onPress={() => { setQuery(''); setNotFound(false) }} style={styles.clearBtn}>
+                <Text style={styles.clearText}>✕</Text>
               </TouchableOpacity>
-            )}
-          />
-        )}
+            )
+          }
+          <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={searching}>
+            <Text style={styles.searchBtnText}>이동</Text>
+          </TouchableOpacity>
+        </View>
+        {notFound && <Text style={styles.notFoundText}>검색 결과가 없어요</Text>}
       </View>
     </View>
   )
@@ -250,6 +194,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 5,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  searchBoxError: {
+    borderColor: '#FF6B8A',
   },
   searchIcon: {
     fontSize: 15,
@@ -264,49 +213,28 @@ const styles = StyleSheet.create({
   },
   clearBtn: {
     padding: 4,
+    marginRight: 4,
   },
   clearText: {
     fontSize: 13,
     color: '#ccc',
   },
-  predictionList: {
-    backgroundColor: 'white',
-    borderRadius: 16,
+  searchBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  searchBtnText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  notFoundText: {
     marginTop: 6,
-    maxHeight: 240,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-    overflow: 'hidden',
-  },
-  predictionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
-    gap: 10,
-  },
-  predictionItemLast: {
-    borderBottomWidth: 0,
-  },
-  predictionIcon: {
-    fontSize: 14,
-  },
-  predictionTexts: {
-    flex: 1,
-    gap: 2,
-  },
-  predictionMain: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  predictionSub: {
-    fontSize: 11,
-    color: COLORS.textSub,
+    marginLeft: 4,
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '500',
   },
 })
