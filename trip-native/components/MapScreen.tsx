@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Keyboard,
+  ActivityIndicator, Keyboard, Modal, FlatList, SafeAreaView,
 } from 'react-native'
 import MapView, { Marker, Callout, MapPressEvent, Region } from 'react-native-maps'
 import { GOOGLE_MAPS_API_KEY, COLORS } from '../constants'
@@ -14,7 +14,14 @@ interface Props {
   onMarkerPress: (id: number) => void
 }
 
-const INITIAL_REGION = {
+interface SearchResult {
+  name: string
+  address: string
+  lat: number
+  lng: number
+}
+
+const INITIAL_REGION: Region = {
   latitude: 37.5665,
   longitude: 126.978,
   latitudeDelta: 0.05,
@@ -27,6 +34,8 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   const [searching, setSearching] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [region, setRegion] = useState<Region>(INITIAL_REGION)
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [showModal, setShowModal] = useState(false)
 
   const handleSearch = async () => {
     if (!query.trim()) return
@@ -39,28 +48,38 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       const res = await fetch(url)
       const data = await res.json()
 
-      if (data.status !== 'OK' || !data.results?.[0]) {
-        setErrorMsg(`검색 실패: ${data.status}`)
+      if (data.status !== 'OK' || !data.results?.length) {
+        setErrorMsg(`검색 결과가 없어요 (${data.status})`)
         return
       }
 
-      const lat: number = data.results[0].geometry.location.lat
-      const lng: number = data.results[0].geometry.location.lng
+      const parsed: SearchResult[] = data.results.slice(0, 5).map((r: any) => ({
+        name: r.address_components?.[0]?.long_name ?? query,
+        address: r.formatted_address ?? '',
+        lat: r.geometry.location.lat,
+        lng: r.geometry.location.lng,
+      }))
 
-      const newRegion: Region = {
-        latitude: lat,
-        longitude: lng,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }
-      setRegion(newRegion)
-      mapRef.current?.animateToRegion(newRegion, 600)
-      setQuery('')
+      setResults(parsed)
+      setShowModal(true)
     } catch (e: any) {
       setErrorMsg(`에러: ${e?.message ?? '알 수 없는 오류'}`)
     } finally {
       setSearching(false)
     }
+  }
+
+  const handleSelectResult = (result: SearchResult) => {
+    setShowModal(false)
+    setQuery('')
+    const newRegion: Region = {
+      latitude: result.lat,
+      longitude: result.lng,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    }
+    setRegion(newRegion)
+    mapRef.current?.animateToRegion(newRegion, 600)
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
@@ -113,7 +132,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="장소 검색 후 엔터"
+            placeholder="장소 검색"
             placeholderTextColor="#bbb"
             value={query}
             onChangeText={(text) => { setQuery(text); setErrorMsg('') }}
@@ -129,112 +148,132 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
             )
           }
           <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={searching}>
-            <Text style={styles.searchBtnText}>이동</Text>
+            <Text style={styles.searchBtnText}>검색</Text>
           </TouchableOpacity>
         </View>
-        {!!errorMsg && <Text style={styles.notFoundText}>{errorMsg}</Text>}
+        {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
       </View>
+
+      {/* 검색 결과 팝업 */}
+      <Modal
+        visible={showModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowModal(false)}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>검색 결과</Text>
+            <FlatList
+              data={results}
+              keyExtractor={(_, i) => String(i)}
+              renderItem={({ item, index }) => (
+                <TouchableOpacity
+                  style={[styles.resultItem, index === results.length - 1 && styles.resultItemLast]}
+                  onPress={() => handleSelectResult(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.resultIcon}>
+                    <Text style={styles.resultIconText}>📍</Text>
+                  </View>
+                  <View style={styles.resultTexts}>
+                    <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
+                  </View>
+                  <Text style={styles.resultArrow}>›</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   marker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 32, height: 32, borderRadius: 16,
     backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2.5,
-    borderColor: 'white',
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2.5, borderColor: 'white',
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOpacity: 0.4, shadowRadius: 4, elevation: 5,
   },
   markerSelected: {
     backgroundColor: COLORS.mint,
     transform: [{ scale: 1.25 }],
     shadowColor: COLORS.mint,
   },
-  markerText: {
-    color: 'white',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  callout: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  calloutText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
+  markerText: { color: 'white', fontSize: 13, fontWeight: '800' },
+  callout: { paddingHorizontal: 10, paddingVertical: 4 },
+  calloutText: { fontSize: 13, fontWeight: '600', color: COLORS.text },
+
   searchWrapper: {
     position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 14,
+    top: 14, left: 14, right: 14,
   },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 5,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'white', borderRadius: 16,
+    paddingHorizontal: 12, paddingVertical: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 5,
+    borderWidth: 1.5, borderColor: 'transparent',
   },
-  searchBoxError: {
-    borderColor: '#FF6B8A',
-  },
-  searchIcon: {
-    fontSize: 15,
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text,
-    padding: 0,
-  },
-  clearBtn: {
-    padding: 4,
-    marginRight: 4,
-  },
-  clearText: {
-    fontSize: 13,
-    color: '#ccc',
-  },
+  searchBoxError: { borderColor: COLORS.primary },
+  searchIcon: { fontSize: 15, marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 14, fontWeight: '500', color: COLORS.text, padding: 0 },
+  clearBtn: { padding: 4, marginRight: 4 },
+  clearText: { fontSize: 13, color: '#ccc' },
   searchBtn: {
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
   },
-  searchBtnText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '700',
+  searchBtnText: { color: 'white', fontSize: 12, fontWeight: '700' },
+  errorText: { marginTop: 6, marginLeft: 4, fontSize: 12, color: COLORS.primary, fontWeight: '500' },
+
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
   },
-  notFoundText: {
-    marginTop: 6,
-    marginLeft: 4,
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '500',
+  modalSheet: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingTop: 12, paddingBottom: 32,
+    maxHeight: '60%',
   },
+  modalHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: '#E0E0E0',
+    alignSelf: 'center', marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 16, fontWeight: '700', color: COLORS.text,
+    paddingHorizontal: 20, marginBottom: 8,
+  },
+  resultItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
+    gap: 12,
+  },
+  resultItemLast: { borderBottomWidth: 0 },
+  resultIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  resultIconText: { fontSize: 16 },
+  resultTexts: { flex: 1, gap: 2 },
+  resultName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  resultAddress: { fontSize: 11, color: COLORS.textSub },
+  resultArrow: { fontSize: 20, color: '#D0D0D0', fontWeight: '300' },
 })
