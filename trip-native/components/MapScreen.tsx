@@ -38,6 +38,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   const [results, setResults] = useState<SearchResult[]>([])
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [previewMarker, setPreviewMarker] = useState<SearchResult | null>(null)
 
   const parseResults = (items: any[]): SearchResult[] =>
     items.map((r: any) => ({
@@ -102,6 +103,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   const handleSelectResult = (result: SearchResult) => {
     setShowModal(false)
     setQuery('')
+    setPreviewMarker(result)
     const newRegion: Region = {
       latitude: result.lat,
       longitude: result.lng,
@@ -113,6 +115,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
+    setPreviewMarker(null)
     const { latitude, longitude } = e.nativeEvent.coordinate
     try {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
@@ -138,6 +141,23 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
         showsUserLocation
         showsMyLocationButton
       >
+        {previewMarker && (
+          <Marker
+            coordinate={{ latitude: previewMarker.lat, longitude: previewMarker.lng }}
+            anchor={{ x: 0.5, y: 1 }}
+          >
+            <View style={styles.previewMarkerWrapper}>
+              <View style={styles.previewMarker}>
+                <Text style={styles.previewMarkerText}>📍</Text>
+              </View>
+              <View style={styles.previewBubble}>
+                <Text style={styles.previewBubbleName} numberOfLines={1}>{previewMarker.name}</Text>
+                <Text style={styles.previewBubbleAddr} numberOfLines={1}>{previewMarker.address}</Text>
+              </View>
+            </View>
+          </Marker>
+        )}
+
         {places.map((place, index) => (
           <Marker
             key={place.id}
@@ -330,5 +350,51 @@ const styles = StyleSheet.create({
   loadingMoreText: {
     fontSize: 12,
     color: COLORS.textSub,
+  },
+  previewMarkerWrapper: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  previewBubble: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  previewBubbleName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  previewBubbleAddr: {
+    fontSize: 10,
+    color: COLORS.textSub,
+    marginTop: 1,
+  },
+  previewMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.mintLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.mint,
+    shadowColor: COLORS.mint,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  previewMarkerText: {
+    fontSize: 18,
   },
 })
