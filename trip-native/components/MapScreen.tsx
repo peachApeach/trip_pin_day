@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Keyboard, Alert,
+  ActivityIndicator, Keyboard,
 } from 'react-native'
 import MapView, { Marker, Callout, MapPressEvent, Region } from 'react-native-maps'
 import { GOOGLE_MAPS_API_KEY, COLORS } from '../constants'
@@ -109,7 +109,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
 
       {/* 검색창 */}
       <View style={styles.searchWrapper}>
-        <View style={[styles.searchBox, notFound && styles.searchBoxError]}>
+        <View style={[styles.searchBox, !!errorMsg && styles.searchBoxError]}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
