@@ -32,15 +32,17 @@ export default function App() {
   const travelMode = activeTrip?.travelMode ?? 'DRIVING'
 
   useEffect(() => {
-    if (places.length < 2) { setTravelSegments([]); return }
+    const currentPlaces = activeTrip?.places ?? []
+    const currentMode = activeTrip?.travelMode ?? 'DRIVING'
+    if (currentPlaces.length < 2) { setTravelSegments([]); return }
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       setSegmentsLoading(true)
-      const segments = await fetchTravelSegments(places, travelMode)
+      const segments = await fetchTravelSegments(currentPlaces, currentMode)
       setTravelSegments(segments)
       setSegmentsLoading(false)
     }, 800)
-  }, [places, travelMode])
+  }, [activeTrip])
 
   const updateTrip = useCallback((updater: (t: Trip) => Trip) => {
     setActiveTrip((prev) => prev ? updater(prev) : prev)
