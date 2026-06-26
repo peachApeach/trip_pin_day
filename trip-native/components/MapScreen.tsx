@@ -135,7 +135,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
         {previewMarker && (
           <Marker
             coordinate={{ latitude: previewMarker.lat, longitude: previewMarker.lng }}
-            tracksViewChanges={false}
+            tracksViewChanges
           >
             <View style={styles.previewMarkerWrapper}>
               <View style={styles.previewBubble}>
