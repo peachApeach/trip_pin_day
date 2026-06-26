@@ -34,7 +34,6 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
-  const [region, setRegion] = useState<Region>(INITIAL_REGION)
   const [results, setResults] = useState<SearchResult[]>([])
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
@@ -79,14 +78,11 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   const handleLoadMore = async () => {
     if (!nextPageToken || loadingMore) return
     setLoadingMore(true)
-
     try {
-      // next_page_token은 발급 후 2초 대기 필요
       await new Promise((r) => setTimeout(r, 2000))
       const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=${nextPageToken}&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
-
       if (data.status === 'OK' && data.results?.length) {
         setResults((prev) => [...prev, ...parseResults(data.results)])
         setNextPageToken(data.next_page_token ?? null)
@@ -104,14 +100,10 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
     setShowModal(false)
     setQuery('')
     setPreviewMarker(result)
-    const newRegion: Region = {
-      latitude: result.lat,
-      longitude: result.lng,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    }
-    setRegion(newRegion)
-    mapRef.current?.animateToRegion(newRegion, 600)
+    mapRef.current?.animateToRegion(
+      { latitude: result.lat, longitude: result.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+      600
+    )
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
@@ -135,8 +127,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        region={region}
-        onRegionChangeComplete={setRegion}
+        initialRegion={INITIAL_REGION}
         onPress={handleMapPress}
         showsUserLocation
         showsMyLocationButton
@@ -144,16 +135,15 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
         {previewMarker && (
           <Marker
             coordinate={{ latitude: previewMarker.lat, longitude: previewMarker.lng }}
-            anchor={{ x: 0.5, y: 1 }}
+            tracksViewChanges={false}
           >
             <View style={styles.previewMarkerWrapper}>
-              <View style={styles.previewMarker}>
-                <Text style={styles.previewMarkerText}>📍</Text>
-              </View>
               <View style={styles.previewBubble}>
                 <Text style={styles.previewBubbleName} numberOfLines={1}>{previewMarker.name}</Text>
                 <Text style={styles.previewBubbleAddr} numberOfLines={1}>{previewMarker.address}</Text>
               </View>
+              <View style={styles.previewDot} />
+              <View style={styles.previewTail} />
             </View>
           </Marker>
         )}
@@ -163,6 +153,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
             key={place.id}
             coordinate={{ latitude: place.lat, longitude: place.lng }}
             onPress={() => onMarkerPress(place.id)}
+            tracksViewChanges={false}
           >
             <View style={[styles.marker, selectedPlaceId === place.id && styles.markerSelected]}>
               <Text style={styles.markerText}>{index + 1}</Text>
@@ -224,6 +215,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
               keyExtractor={(_, i) => String(i)}
               onEndReached={handleLoadMore}
               onEndReachedThreshold={0.3}
+              keyboardShouldPersistTaps="handled"
               ListFooterComponent={
                 loadingMore ? (
                   <View style={styles.loadingMore}>
@@ -281,8 +273,7 @@ const styles = StyleSheet.create({
   calloutText: { fontSize: 13, fontWeight: '600', color: COLORS.text },
 
   searchWrapper: {
-    position: 'absolute',
-    top: 14, left: 14, right: 14,
+    position: 'absolute', top: 14, left: 14, right: 14,
   },
   searchBox: {
     flexDirection: 'row', alignItems: 'center',
@@ -305,8 +296,7 @@ const styles = StyleSheet.create({
   errorText: { marginTop: 6, marginLeft: 4, fontSize: 12, color: COLORS.primary, fontWeight: '500' },
 
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'flex-end',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: 'white',
@@ -316,8 +306,7 @@ const styles = StyleSheet.create({
   },
   modalHandle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#E0E0E0',
-    alignSelf: 'center', marginBottom: 16,
+    backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 16,
   },
   modalTitle: {
     fontSize: 16, fontWeight: '700', color: COLORS.text,
@@ -326,8 +315,7 @@ const styles = StyleSheet.create({
   resultItem: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
-    gap: 12,
+    borderBottomWidth: 1, borderBottomColor: '#F5F5F5', gap: 12,
   },
   resultItemLast: { borderBottomWidth: 0 },
   resultIcon: {
@@ -341,60 +329,34 @@ const styles = StyleSheet.create({
   resultAddress: { fontSize: 11, color: COLORS.textSub },
   resultArrow: { fontSize: 20, color: '#D0D0D0', fontWeight: '300' },
   loadingMore: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', paddingVertical: 14, gap: 8,
   },
-  loadingMoreText: {
-    fontSize: 12,
-    color: COLORS.textSub,
-  },
-  previewMarkerWrapper: {
-    alignItems: 'center',
-    gap: 4,
-  },
+  loadingMoreText: { fontSize: 12, color: COLORS.textSub },
+
+  previewMarkerWrapper: { alignItems: 'center' },
   previewBubble: {
     backgroundColor: 'white',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    maxWidth: 180,
+    borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 8,
+    maxWidth: 200,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    shadowOpacity: 0.15, shadowRadius: 6, elevation: 4,
+    borderWidth: 1.5, borderColor: COLORS.mint,
+    marginBottom: 4,
   },
-  previewBubbleName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  previewBubbleAddr: {
-    fontSize: 10,
-    color: COLORS.textSub,
-    marginTop: 1,
-  },
-  previewMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.mintLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.mint,
+  previewBubbleName: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  previewBubbleAddr: { fontSize: 10, color: COLORS.textSub, marginTop: 2 },
+  previewDot: {
+    width: 14, height: 14, borderRadius: 7,
+    backgroundColor: COLORS.mint,
+    borderWidth: 2.5, borderColor: 'white',
     shadowColor: COLORS.mint,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5, shadowRadius: 3, elevation: 4,
   },
-  previewMarkerText: {
-    fontSize: 18,
+  previewTail: {
+    width: 2, height: 6, backgroundColor: COLORS.mint,
   },
 })
