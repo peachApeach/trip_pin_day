@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
 
   previewCard: {
     position: 'absolute',
-    bottom: 16, left: 14, right: 14,
+    bottom: 68, left: 14, right: 14,
   },
   previewCardInner: {
     flexDirection: 'row', alignItems: 'center',
