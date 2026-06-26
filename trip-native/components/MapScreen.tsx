@@ -108,7 +108,6 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
 
   const handleMapPress = async (e: MapPressEvent) => {
     if (showModal) return
-    setPreviewMarker(null)
     const { latitude, longitude } = e.nativeEvent.coordinate
     try {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
@@ -117,9 +116,9 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       const result = data?.results?.[0]
       const name: string = result?.address_components?.[0]?.long_name ?? '선택한 장소'
       const address: string = result?.formatted_address ?? ''
-      onMapPress({ lat: latitude, lng: longitude, name, address })
+      setPreviewMarker({ lat: latitude, lng: longitude, name, address })
     } catch {
-      onMapPress({ lat: latitude, lng: longitude, name: '선택한 장소', address: '' })
+      setPreviewMarker({ lat: latitude, lng: longitude, name: '선택한 장소', address: '' })
     }
   }
 
