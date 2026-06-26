@@ -135,16 +135,16 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
         {previewMarker && (
           <Marker
             coordinate={{ latitude: previewMarker.lat, longitude: previewMarker.lng }}
-            tracksViewChanges
+            pinColor={COLORS.mint}
           >
-            <View style={styles.previewMarkerWrapper}>
-              <View style={styles.previewBubble}>
+            <Callout tooltip>
+              <View style={styles.previewCallout}>
                 <Text style={styles.previewBubbleName} numberOfLines={1}>{previewMarker.name}</Text>
-                <Text style={styles.previewBubbleAddr} numberOfLines={1}>{previewMarker.address}</Text>
+                {!!previewMarker.address && (
+                  <Text style={styles.previewBubbleAddr} numberOfLines={1}>{previewMarker.address}</Text>
+                )}
               </View>
-              <View style={styles.previewDot} />
-              <View style={styles.previewTail} />
-            </View>
+            </Callout>
           </Marker>
         )}
 
@@ -334,29 +334,16 @@ const styles = StyleSheet.create({
   },
   loadingMoreText: { fontSize: 12, color: COLORS.textSub },
 
-  previewMarkerWrapper: { alignItems: 'center' },
-  previewBubble: {
+  previewCallout: {
     backgroundColor: 'white',
     borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 8,
-    maxWidth: 200,
+    paddingHorizontal: 14, paddingVertical: 10,
+    maxWidth: 220,
+    borderWidth: 1.5, borderColor: COLORS.mint,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15, shadowRadius: 6, elevation: 4,
-    borderWidth: 1.5, borderColor: COLORS.mint,
-    marginBottom: 4,
   },
   previewBubbleName: { fontSize: 13, fontWeight: '700', color: COLORS.text },
   previewBubbleAddr: { fontSize: 10, color: COLORS.textSub, marginTop: 2 },
-  previewDot: {
-    width: 14, height: 14, borderRadius: 7,
-    backgroundColor: COLORS.mint,
-    borderWidth: 2.5, borderColor: 'white',
-    shadowColor: COLORS.mint,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5, shadowRadius: 3, elevation: 4,
-  },
-  previewTail: {
-    width: 2, height: 6, backgroundColor: COLORS.mint,
-  },
 })
