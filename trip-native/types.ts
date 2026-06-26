@@ -1,3 +1,11 @@
+export interface Trip {
+  id: number
+  title: string
+  places: Place[]
+  startDate: string
+  travelMode: TravelMode
+}
+
 export interface Place {
   id: number
   name: string

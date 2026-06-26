@@ -4,6 +4,7 @@
 
 ## 주요 기능
 
+- **여행 목록** — 여러 여행 계획을 관리, 여행 추가/삭제
 - **장소 검색** — 검색창에 입력 → 결과 목록 팝업 → 선택 시 지도 이동 + 하단 카드 표시 (무한 스크롤 지원)
 - **지도 탭** — 지도 빈 곳 또는 구글 POI 핀을 탭하면 하단 카드 표시
 - **장소 추가** — 하단 카드의 **+ 추가** 버튼을 눌러야만 장소 추가 (실수 추가 방지)
@@ -81,10 +82,11 @@ npx expo start
 
 ```
 trip-native/
-├── App.tsx                  # 루트 컴포넌트, 전역 상태 관리, 탭 네비게이션
-├── types.ts                 # 공유 타입 정의 (Place, TravelSegment 등)
+├── App.tsx                  # 루트 컴포넌트, 여행 목록 ↔ 여행 화면 전환
+├── types.ts                 # 공유 타입 정의 (Trip, Place, TravelSegment 등)
 ├── constants.ts             # 컬러 팔레트, API 키
 ├── components/
+│   ├── TripListScreen.tsx   # 여행 목록 홈 화면
 │   ├── MapScreen.tsx        # 지도, 마커, 검색, POI 탭, preview 카드
 │   ├── PlaceList.tsx        # 장소 목록, 체류 시간 설정
 │   └── Timetable.tsx        # 타임테이블, 이동 수단 선택
