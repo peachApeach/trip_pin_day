@@ -110,10 +110,6 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
     if (showModal) return
     const { coordinate, name } = e.nativeEvent
     setPreviewMarker({ lat: coordinate.latitude, lng: coordinate.longitude, name, address: '' })
-    mapRef.current?.animateToRegion(
-      { latitude: coordinate.latitude, longitude: coordinate.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-      400
-    )
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
