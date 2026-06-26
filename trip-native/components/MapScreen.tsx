@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, Keyboard, FlatList,
 } from 'react-native'
 import MapView, { Marker, Callout, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
+import * as Location from 'expo-location'
 import { GOOGLE_MAPS_API_KEY, COLORS } from '../constants'
 import type { Place } from '../types'
 
@@ -30,6 +31,20 @@ const INITIAL_REGION: Region = {
 
 export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarkerPress }: Props) {
   const mapRef = useRef<MapView>(null)
+
+  useEffect(() => {
+    ;(async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') return
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      mapRef.current?.animateToRegion({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      }, 800)
+    })()
+  }, [])
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)

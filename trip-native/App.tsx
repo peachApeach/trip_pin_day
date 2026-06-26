@@ -92,24 +92,22 @@ export default function App() {
       </View>
 
       <View style={styles.content}>
-        {activeTab === 'map' && (
-          <View style={styles.mapWrapper}>
-            <MapScreen
-              places={places}
-              selectedPlaceId={selectedPlaceId}
-              onMapPress={handleMapPress}
-              onMarkerPress={(id) => {
-                setSelectedPlaceId(id)
-                setActiveTab('list')
-              }}
-            />
-            {places.length === 0 && (
-              <View style={styles.mapHint}>
-                <Text style={styles.mapHintText}>✨ 지도를 탭해서 장소를 추가해요</Text>
-              </View>
-            )}
-          </View>
-        )}
+        <View style={[styles.mapWrapper, activeTab !== 'map' && { display: 'none' }]}>
+          <MapScreen
+            places={places}
+            selectedPlaceId={selectedPlaceId}
+            onMapPress={handleMapPress}
+            onMarkerPress={(id) => {
+              setSelectedPlaceId(id)
+              setActiveTab('list')
+            }}
+          />
+          {places.length === 0 && (
+            <View style={styles.mapHint}>
+              <Text style={styles.mapHintText}>✨ 지도를 탭해서 장소를 추가해요</Text>
+            </View>
+          )}
+        </View>
 
         {activeTab === 'list' && (
           <PlaceList
