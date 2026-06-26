@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import {
-  View, Text, TouchableOpacity, SafeAreaView,
+  View, Text, TouchableOpacity,
   StyleSheet, StatusBar, Platform,
 } from 'react-native'
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import MapScreen from './components/MapScreen'
 import PlaceList from './components/PlaceList'
 import Timetable from './components/Timetable'
@@ -78,7 +79,8 @@ export default function App() {
   ]
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaProvider>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
 
       <View style={styles.header}>
@@ -151,6 +153,7 @@ export default function App() {
         ))}
       </View>
     </SafeAreaView>
+    </SafeAreaProvider>
   )
 }
 
