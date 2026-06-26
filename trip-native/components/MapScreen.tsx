@@ -30,7 +30,6 @@ const INITIAL_REGION: Region = {
 
 export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarkerPress }: Props) {
   const mapRef = useRef<MapView>(null)
-  const previewMarkerRef = useRef<any>(null)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -105,9 +104,6 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       { latitude: result.lat, longitude: result.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
       600
     )
-    setTimeout(() => {
-      previewMarkerRef.current?.showCallout()
-    }, 800)
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
@@ -138,19 +134,9 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       >
         {previewMarker && (
           <Marker
-            ref={previewMarkerRef}
             coordinate={{ latitude: previewMarker.lat, longitude: previewMarker.lng }}
             pinColor={COLORS.mint}
-          >
-            <Callout tooltip>
-              <View style={styles.previewCallout}>
-                <Text style={styles.previewBubbleName} numberOfLines={1}>{previewMarker.name}</Text>
-                {!!previewMarker.address && (
-                  <Text style={styles.previewBubbleAddr} numberOfLines={1}>{previewMarker.address}</Text>
-                )}
-              </View>
-            </Callout>
-          </Marker>
+          />
         )}
 
         {places.map((place, index) => (
@@ -199,6 +185,24 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
         </View>
         {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
       </View>
+
+      {/* preview 장소 정보 카드 */}
+      {previewMarker && (
+        <View style={styles.previewCard}>
+          <View style={styles.previewCardInner}>
+            <View style={styles.previewCardDot} />
+            <View style={styles.previewCardTexts}>
+              <Text style={styles.previewCardName} numberOfLines={1}>{previewMarker.name}</Text>
+              {!!previewMarker.address && (
+                <Text style={styles.previewCardAddr} numberOfLines={1}>{previewMarker.address}</Text>
+              )}
+            </View>
+            <TouchableOpacity onPress={() => setPreviewMarker(null)} style={styles.previewCardClose}>
+              <Text style={styles.previewCardCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* 검색 결과 팝업 */}
       <Modal
@@ -339,16 +343,27 @@ const styles = StyleSheet.create({
   },
   loadingMoreText: { fontSize: 12, color: COLORS.textSub },
 
-  previewCallout: {
+  previewCard: {
+    position: 'absolute',
+    bottom: 16, left: 14, right: 14,
+  },
+  previewCardInner: {
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'white',
-    borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 10,
-    maxWidth: 220,
+    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12,
     borderWidth: 1.5, borderColor: COLORS.mint,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, shadowRadius: 6, elevation: 4,
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 5,
+    gap: 10,
   },
-  previewBubbleName: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  previewBubbleAddr: { fontSize: 10, color: COLORS.textSub, marginTop: 2 },
+  previewCardDot: {
+    width: 12, height: 12, borderRadius: 6,
+    backgroundColor: COLORS.mint, flexShrink: 0,
+  },
+  previewCardTexts: { flex: 1 },
+  previewCardName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  previewCardAddr: { fontSize: 11, color: COLORS.textSub, marginTop: 2 },
+  previewCardClose: { padding: 4 },
+  previewCardCloseText: { fontSize: 13, color: '#ccc' },
 })
