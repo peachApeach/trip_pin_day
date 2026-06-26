@@ -144,7 +144,6 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
             key={place.id}
             coordinate={{ latitude: place.lat, longitude: place.lng }}
             onPress={() => onMarkerPress(place.id)}
-            tracksViewChanges={false}
           >
             <View style={[styles.marker, selectedPlaceId === place.id && styles.markerSelected]}>
               <Text style={styles.markerText}>{index + 1}</Text>
