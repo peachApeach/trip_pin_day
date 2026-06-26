@@ -30,6 +30,7 @@ const INITIAL_REGION: Region = {
 
 export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarkerPress }: Props) {
   const mapRef = useRef<MapView>(null)
+  const previewMarkerRef = useRef<any>(null)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -104,6 +105,9 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       { latitude: result.lat, longitude: result.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
       600
     )
+    setTimeout(() => {
+      previewMarkerRef.current?.showCallout()
+    }, 800)
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
@@ -134,6 +138,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       >
         {previewMarker && (
           <Marker
+            ref={previewMarkerRef}
             coordinate={{ latitude: previewMarker.lat, longitude: previewMarker.lng }}
             pinColor={COLORS.mint}
           >
