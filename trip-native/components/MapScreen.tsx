@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Keyboard, Modal, FlatList,
+  ActivityIndicator, Keyboard, FlatList,
 } from 'react-native'
 import MapView, { Marker, Callout, MapPressEvent, Region } from 'react-native-maps'
 import { GOOGLE_MAPS_API_KEY, COLORS } from '../constants'
@@ -30,7 +30,6 @@ const INITIAL_REGION: Region = {
 
 export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarkerPress }: Props) {
   const mapRef = useRef<MapView>(null)
-  const suppressMapPress = useRef(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -98,7 +97,6 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   }
 
   const handleSelectResult = (result: SearchResult) => {
-    suppressMapPress.current = true
     setShowModal(false)
     setQuery('')
     setPreviewMarker(result)
@@ -106,11 +104,10 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       { latitude: result.lat, longitude: result.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
       600
     )
-    setTimeout(() => { suppressMapPress.current = false }, 800)
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
-    if (suppressMapPress.current) return
+    if (showModal) return
     setPreviewMarker(null)
     const { latitude, longitude } = e.nativeEvent.coordinate
     try {
@@ -216,21 +213,22 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
         </View>
       )}
 
-      {/* 검색 결과 팝업 */}
-      <Modal
-        visible={showModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowModal(false)}
-        >
-          <View style={styles.modalSheet}>
+      {/* 검색 결과 패널 */}
+      {showModal && (
+        <View style={styles.resultsPanel}>
+          <TouchableOpacity
+            style={styles.resultsOverlay}
+            activeOpacity={1}
+            onPress={() => setShowModal(false)}
+          />
+          <View style={styles.resultsSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>검색 결과</Text>
+            <View style={styles.resultsTitleRow}>
+              <Text style={styles.modalTitle}>검색 결과</Text>
+              <TouchableOpacity onPress={() => setShowModal(false)} style={styles.resultsDismiss}>
+                <Text style={styles.resultsDismissText}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <FlatList
               data={results}
               keyExtractor={(_, i) => String(i)}
@@ -267,8 +265,8 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
               )}
             />
           </View>
-        </TouchableOpacity>
-      </Modal>
+        </View>
+      )}
     </View>
   )
 }
@@ -316,10 +314,15 @@ const styles = StyleSheet.create({
   searchBtnText: { color: 'white', fontSize: 12, fontWeight: '700' },
   errorText: { marginTop: 6, marginLeft: 4, fontSize: 12, color: COLORS.primary, fontWeight: '500' },
 
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end',
+  resultsPanel: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'flex-end',
   },
-  modalSheet: {
+  resultsOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  resultsSheet: {
     backgroundColor: 'white',
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingTop: 12, paddingBottom: 32,
@@ -327,12 +330,15 @@ const styles = StyleSheet.create({
   },
   modalHandle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 16,
+    backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 12,
   },
-  modalTitle: {
-    fontSize: 16, fontWeight: '700', color: COLORS.text,
+  resultsTitleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, marginBottom: 8,
   },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  resultsDismiss: { padding: 4 },
+  resultsDismissText: { fontSize: 16, color: '#ccc' },
   resultItem: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 14,
