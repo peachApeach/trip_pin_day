@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   View, Text, TouchableOpacity,
   StyleSheet, StatusBar, Platform,
@@ -21,6 +22,21 @@ interface Tab {
 export default function App() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  // 앱 시작 시 저장된 데이터 불러오기
+  useEffect(() => {
+    AsyncStorage.getItem('trips').then((json) => {
+      if (json) setTrips(JSON.parse(json))
+      setLoaded(true)
+    }).catch(() => setLoaded(true))
+  }, [])
+
+  // trips 변경 시 저장
+  useEffect(() => {
+    if (!loaded) return
+    AsyncStorage.setItem('trips', JSON.stringify(trips)).catch(() => {})
+  }, [trips, loaded])
   const [activeTab, setActiveTab] = useState<TabKey>('map')
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
   const [travelSegments, setTravelSegments] = useState<(TravelSegment | null)[]>([])
@@ -101,6 +117,8 @@ export default function App() {
   const handleBackToList = () => {
     setActiveTrip(null)
   }
+
+  if (!loaded) return null
 
   // 홈 화면 (여행 목록)
   if (!activeTrip) {
