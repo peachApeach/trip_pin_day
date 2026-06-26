@@ -3,7 +3,7 @@ import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, Keyboard, FlatList,
 } from 'react-native'
-import MapView, { Marker, Callout, MapPressEvent, Region } from 'react-native-maps'
+import MapView, { Marker, Callout, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import { GOOGLE_MAPS_API_KEY, COLORS } from '../constants'
 import type { Place } from '../types'
 
@@ -106,6 +106,16 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
     )
   }
 
+  const handlePoiClick = (e: PoiClickEvent) => {
+    if (showModal) return
+    const { coordinate, name } = e.nativeEvent
+    setPreviewMarker({ lat: coordinate.latitude, lng: coordinate.longitude, name, address: '' })
+    mapRef.current?.animateToRegion(
+      { latitude: coordinate.latitude, longitude: coordinate.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+      400
+    )
+  }
+
   const handleMapPress = async (e: MapPressEvent) => {
     if (showModal) return
     const { latitude, longitude } = e.nativeEvent.coordinate
@@ -129,6 +139,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
         style={StyleSheet.absoluteFillObject}
         initialRegion={INITIAL_REGION}
         onPress={handleMapPress}
+        onPoiClick={handlePoiClick}
         showsUserLocation
         showsMyLocationButton
       >
