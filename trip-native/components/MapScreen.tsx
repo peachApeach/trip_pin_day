@@ -30,6 +30,7 @@ const INITIAL_REGION: Region = {
 
 export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarkerPress }: Props) {
   const mapRef = useRef<MapView>(null)
+  const suppressMapPress = useRef(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -97,6 +98,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   }
 
   const handleSelectResult = (result: SearchResult) => {
+    suppressMapPress.current = true
     setShowModal(false)
     setQuery('')
     setPreviewMarker(result)
@@ -104,9 +106,11 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
       { latitude: result.lat, longitude: result.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
       600
     )
+    setTimeout(() => { suppressMapPress.current = false }, 800)
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
+    if (suppressMapPress.current) return
     setPreviewMarker(null)
     const { latitude, longitude } = e.nativeEvent.coordinate
     try {
