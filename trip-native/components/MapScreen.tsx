@@ -197,6 +197,15 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
                 <Text style={styles.previewCardAddr} numberOfLines={1}>{previewMarker.address}</Text>
               )}
             </View>
+            <TouchableOpacity
+              style={styles.previewCardAddBtn}
+              onPress={() => {
+                onMapPress({ lat: previewMarker.lat, lng: previewMarker.lng, name: previewMarker.name, address: previewMarker.address })
+                setPreviewMarker(null)
+              }}
+            >
+              <Text style={styles.previewCardAddText}>+ 추가</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setPreviewMarker(null)} style={styles.previewCardClose}>
               <Text style={styles.previewCardCloseText}>✕</Text>
             </TouchableOpacity>
@@ -364,6 +373,11 @@ const styles = StyleSheet.create({
   previewCardTexts: { flex: 1 },
   previewCardName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   previewCardAddr: { fontSize: 11, color: COLORS.textSub, marginTop: 2 },
+  previewCardAddBtn: {
+    backgroundColor: COLORS.mint,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+  },
+  previewCardAddText: { color: 'white', fontSize: 12, fontWeight: '700' },
   previewCardClose: { padding: 4 },
   previewCardCloseText: { fontSize: 13, color: '#ccc' },
 })
