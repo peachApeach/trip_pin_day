@@ -4,6 +4,8 @@ export interface Trip {
   places: Place[]
   startDate: string
   travelMode: TravelMode
+  tripStartDate: string | null
+  tripEndDate: string | null
 }
 
 export interface Place {

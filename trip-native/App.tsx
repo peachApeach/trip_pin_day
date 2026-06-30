@@ -93,15 +93,19 @@ export default function App() {
     updateTrip((t) => ({ ...t, travelMode: mode }))
   }, [updateTrip])
 
-  const handleAddTrip = (title: string) => {
+  const handleAddTrip = (title: string, tripStartDate: string | null, tripEndDate: string | null) => {
     const d = new Date(); d.setHours(9, 0, 0, 0)
-    const newTrip: Trip = { id: Date.now(), title, places: [], startDate: d.toISOString(), travelMode: 'DRIVING' }
+    const newTrip: Trip = { id: Date.now(), title, places: [], startDate: d.toISOString(), travelMode: 'DRIVING', tripStartDate, tripEndDate }
     setTrips((prev) => [...prev, newTrip])
     setActiveTrip(newTrip)
     setActiveTab('map')
     setSelectedPlaceId(null)
     setTravelSegments([])
   }
+
+  const handleTripDatesChange = useCallback((start: string | null, end: string | null) => {
+    updateTrip((t) => ({ ...t, tripStartDate: start, tripEndDate: end }))
+  }, [updateTrip])
 
   const handleDeleteTrip = (id: number) => {
     setTrips((prev) => prev.filter((t) => t.id !== id))
@@ -194,6 +198,9 @@ export default function App() {
               onTravelModeChange={handleTravelModeChange}
               travelSegments={travelSegments}
               segmentsLoading={segmentsLoading}
+              tripStartDate={activeTrip.tripStartDate}
+              tripEndDate={activeTrip.tripEndDate}
+              onTripDatesChange={handleTripDatesChange}
             />
           )}
         </View>

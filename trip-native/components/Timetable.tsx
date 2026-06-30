@@ -21,6 +21,9 @@ interface Props {
   onTravelModeChange: (mode: TravelMode) => void
   travelSegments: (TravelSegment | null)[]
   segmentsLoading: boolean
+  tripStartDate: string | null
+  tripEndDate: string | null
+  onTripDatesChange: (start: string | null, end: string | null) => void
 }
 
 function addMinutes(date: Date, minutes: number): Date {
@@ -31,6 +34,19 @@ function formatTime(date: Date): string {
   const h = String(date.getHours()).padStart(2, '0')
   const m = String(date.getMinutes()).padStart(2, '0')
   return `${h}:${m}`
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '미정'
+  const d = new Date(iso)
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
+}
+
+function calcNights(start: string | null, end: string | null): string {
+  if (!start || !end) return ''
+  const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
+  if (diff <= 0) return ''
+  return `${diff}박 ${diff + 1}일`
 }
 
 function formatDuration(minutes: number): string {
@@ -47,56 +63,99 @@ const TRAVEL_MODES: { key: TravelMode; icon: string; label: string }[] = [
   { key: 'BICYCLING', icon: '🚴', label: '자전거' },
 ]
 
-const CARD_COLORS = [
-  COLORS.primary,
-  COLORS.mint,
-  '#FFB300',
-  '#7C4DFF',
-  '#43A047',
-]
+const CARD_COLORS = [COLORS.primary, COLORS.mint, '#FFB300', '#7C4DFF', '#43A047']
+
+type PickerMode = 'time' | 'tripStart' | 'tripEnd' | null
 
 export default function Timetable({
   places, startDate, onStartDateChange,
   travelMode, onTravelModeChange,
   travelSegments, segmentsLoading,
+  tripStartDate, tripEndDate, onTripDatesChange,
 }: Props) {
-  const [showPicker, setShowPicker] = useState(false)
+  const [pickerMode, setPickerMode] = useState<PickerMode>(null)
 
   let currentTime = new Date(startDate)
   const schedule: ScheduledPlace[] = places.map((place, index) => {
     const from = new Date(currentTime)
     currentTime = addMinutes(currentTime, place.duration)
     const to = new Date(currentTime)
-
     const seg = travelSegments[index]
     let travelTo: { duration: number; distance: string } | null = null
     if (seg && index < places.length - 1) {
       travelTo = { duration: seg.duration, distance: seg.distance }
       currentTime = addMinutes(currentTime, seg.duration)
     }
-
     return { ...place, from, to, travelTo }
   })
-
   const endTime = new Date(currentTime)
 
-  const handleTimeChange = (event: DateTimePickerEvent, date?: Date) => {
-    setShowPicker(Platform.OS === 'ios')
-    if (date) onStartDateChange(date)
+  const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === 'android') setPickerMode(null)
+    if (!date) return
+    if (pickerMode === 'time') {
+      onStartDateChange(date)
+    } else if (pickerMode === 'tripStart') {
+      const newStart = date.toISOString()
+      const newEnd = tripEndDate && date > new Date(tripEndDate) ? null : tripEndDate
+      onTripDatesChange(newStart, newEnd)
+    } else if (pickerMode === 'tripEnd') {
+      onTripDatesChange(tripStartDate, date.toISOString())
+    }
   }
+
+  const pickerValue = () => {
+    if (pickerMode === 'time') return startDate
+    if (pickerMode === 'tripStart') return tripStartDate ? new Date(tripStartDate) : new Date()
+    if (pickerMode === 'tripEnd') return tripEndDate ? new Date(tripEndDate) : (tripStartDate ? new Date(tripStartDate) : new Date())
+    return new Date()
+  }
+
+  const nights = calcNights(tripStartDate, tripEndDate)
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        {/* 여행 날짜 */}
+        <View style={styles.tripDateRow}>
+          <Text style={styles.sectionLabel}>여행 날짜</Text>
+          <View style={styles.tripDateBtns}>
+            <TouchableOpacity
+              style={[styles.tripDateBtn, tripStartDate && styles.tripDateBtnFilled]}
+              onPress={() => setPickerMode('tripStart')}
+            >
+              <Text style={styles.tripDateBtnLabel}>출발</Text>
+              <Text style={[styles.tripDateBtnValue, tripStartDate && styles.tripDateBtnValueFilled]}>
+                {formatDate(tripStartDate)}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.dateSep}>→</Text>
+            <TouchableOpacity
+              style={[styles.tripDateBtn, tripEndDate && styles.tripDateBtnFilled]}
+              onPress={() => setPickerMode('tripEnd')}
+            >
+              <Text style={styles.tripDateBtnLabel}>귀국</Text>
+              <Text style={[styles.tripDateBtnValue, tripEndDate && styles.tripDateBtnValueFilled]}>
+                {formatDate(tripEndDate)}
+              </Text>
+            </TouchableOpacity>
+            {!!nights && (
+              <View style={styles.nightsBadge}>
+                <Text style={styles.nightsText}>{nights}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* 출발 시간 + 장소 수 */}
         <View style={styles.headerRow}>
           <View style={styles.startBlock}>
-            <Text style={styles.startLabel}>출발 시간</Text>
-            <TouchableOpacity style={styles.timePicker} onPress={() => setShowPicker(true)}>
+            <Text style={styles.sectionLabel}>출발 시간</Text>
+            <TouchableOpacity style={styles.timePicker} onPress={() => setPickerMode('time')}>
               <Text style={styles.timePickerText}>{formatTime(startDate)}</Text>
               <Text style={styles.timePickerIcon}>✏️</Text>
             </TouchableOpacity>
           </View>
-
           {places.length > 0 && (
             <View style={styles.summaryBlock}>
               <Text style={styles.summaryLabel}>총 장소</Text>
@@ -105,16 +164,24 @@ export default function Timetable({
           )}
         </View>
 
-        {showPicker && (
+        {/* DateTimePicker */}
+        {pickerMode !== null && (
           <DateTimePicker
-            value={startDate}
-            mode="time"
+            value={pickerValue()}
+            mode={pickerMode === 'time' ? 'time' : 'date'}
             is24Hour
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleTimeChange}
+            minimumDate={pickerMode === 'tripEnd' && tripStartDate ? new Date(tripStartDate) : undefined}
+            display={Platform.OS === 'ios' ? (pickerMode === 'time' ? 'spinner' : 'inline') : 'default'}
+            onChange={handlePickerChange}
           />
         )}
+        {Platform.OS === 'ios' && pickerMode !== null && (
+          <TouchableOpacity style={styles.pickerDone} onPress={() => setPickerMode(null)}>
+            <Text style={styles.pickerDoneText}>확인</Text>
+          </TouchableOpacity>
+        )}
 
+        {/* 이동 수단 */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.modeRow}>
             {TRAVEL_MODES.map((mode) => (
@@ -170,13 +237,9 @@ export default function Timetable({
                       <Text style={styles.placeAddress} numberOfLines={1}>{item.address}</Text>
                     )}
                     <View style={styles.placeFooter}>
-                      <Text style={styles.placeTime}>
-                        {formatTime(item.from)} ~ {formatTime(item.to)}
-                      </Text>
+                      <Text style={styles.placeTime}>{formatTime(item.from)} ~ {formatTime(item.to)}</Text>
                       <View style={[styles.durationTag, { backgroundColor: dotColor + '18' }]}>
-                        <Text style={[styles.durationTagText, { color: dotColor }]}>
-                          {formatDuration(item.duration)}
-                        </Text>
+                        <Text style={[styles.durationTagText, { color: dotColor }]}>{formatDuration(item.duration)}</Text>
                       </View>
                     </View>
                   </View>
@@ -191,9 +254,7 @@ export default function Timetable({
                     </View>
                     <View style={styles.travelCard}>
                       <Text style={styles.travelCardIcon}>{travelIcon}</Text>
-                      <Text style={styles.travelCardDuration}>
-                        이동 {formatDuration(item.travelTo.duration)}
-                      </Text>
+                      <Text style={styles.travelCardDuration}>이동 {formatDuration(item.travelTo.duration)}</Text>
                       <Text style={styles.travelCardDistance}>{item.travelTo.distance}</Text>
                     </View>
                   </View>
@@ -222,23 +283,39 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     backgroundColor: 'white',
-    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12,
-    gap: 12,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12, gap: 12,
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
   },
+  sectionLabel: {
+    fontSize: 11, fontWeight: '600', color: COLORS.textSub,
+    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4,
+  },
+  tripDateRow: { gap: 4 },
+  tripDateBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tripDateBtn: {
+    flex: 1, borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7,
+  },
+  tripDateBtnFilled: { borderColor: COLORS.mint, backgroundColor: COLORS.mintLight },
+  tripDateBtnLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSub, marginBottom: 2 },
+  tripDateBtnValue: { fontSize: 13, fontWeight: '600', color: '#bbb' },
+  tripDateBtnValueFilled: { color: COLORS.mint },
+  dateSep: { fontSize: 16, color: COLORS.textSub },
+  nightsBadge: { backgroundColor: COLORS.primaryLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  nightsText: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
+  pickerDone: {
+    alignSelf: 'flex-end', backgroundColor: COLORS.mint,
+    paddingHorizontal: 16, paddingVertical: 6, borderRadius: 10,
+  },
+  pickerDoneText: { color: 'white', fontSize: 13, fontWeight: '700' },
+
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   startBlock: { gap: 4 },
-  startLabel: {
-    fontSize: 11, fontWeight: '600', color: COLORS.textSub,
-    textTransform: 'uppercase', letterSpacing: 0.5,
-  },
   timePicker: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: COLORS.primaryLight, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
   },
   timePickerText: { fontSize: 18, fontWeight: '800', color: COLORS.primary, letterSpacing: -0.5 },
   timePickerIcon: { fontSize: 12 },
@@ -260,6 +337,7 @@ const styles = StyleSheet.create({
   modeLabelActive: { color: COLORS.primary },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   loadingText: { fontSize: 12, color: COLORS.textSub },
+
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8, padding: 32 },
   emptyEmoji: { fontSize: 48 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
