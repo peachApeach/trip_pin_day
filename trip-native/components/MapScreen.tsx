@@ -32,28 +32,26 @@ const INITIAL_REGION: Region = {
 export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarkerPress }: Props) {
   const mapRef = useRef<MapView>(null)
 
-  useEffect(() => {
+  const handleMapReady = async () => {
     if (places.length > 0) {
       mapRef.current?.animateToRegion({
         latitude: places[0].lat,
         longitude: places[0].lng,
         latitudeDelta: 0.05,
         longitudeDelta: 0.05,
-      }, 800)
+      }, 600)
       return
     }
-    ;(async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') return
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      mapRef.current?.animateToRegion({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      }, 800)
-    })()
-  }, [])
+    const { status } = await Location.requestForegroundPermissionsAsync()
+    if (status !== 'granted') return
+    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+    mapRef.current?.animateToRegion({
+      latitude: loc.coords.latitude,
+      longitude: loc.coords.longitude,
+      latitudeDelta: 0.05,
+      longitudeDelta: 0.05,
+    }, 600)
+  }
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -158,6 +156,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
         initialRegion={INITIAL_REGION}
+        onMapReady={handleMapReady}
         onPress={handleMapPress}
         onPoiClick={handlePoiClick}
         showsUserLocation
