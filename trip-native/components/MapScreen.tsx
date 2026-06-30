@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import MapView, { Marker, Callout, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
-import { GOOGLE_MAPS_API_KEY, COLORS } from '../constants'
+import { GOOGLE_MAPS_API_KEY, COLORS, PLACE_COLORS } from '../constants'
 import type { Place } from '../types'
 
 interface Props {
@@ -169,13 +169,15 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
           />
         )}
 
-        {places.map((place, index) => (
+        {places.map((place, index) => {
+          const dotColor = PLACE_COLORS[index % PLACE_COLORS.length].dot
+          return (
           <Marker
             key={place.id}
             coordinate={{ latitude: place.lat, longitude: place.lng }}
             onPress={() => onMarkerPress(place.id)}
           >
-            <View style={[styles.marker, selectedPlaceId === place.id && styles.markerSelected]}>
+            <View style={[styles.marker, { backgroundColor: dotColor, shadowColor: dotColor }, selectedPlaceId === place.id && styles.markerSelected]}>
               <Text style={styles.markerText}>{index + 1}</Text>
             </View>
             <Callout>
@@ -184,7 +186,7 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
               </View>
             </Callout>
           </Marker>
-        ))}
+        )})}
       </MapView>
 
       {/* 검색창 */}
@@ -304,17 +306,13 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   marker: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: COLORS.primary,
     justifyContent: 'center', alignItems: 'center',
     borderWidth: 2.5, borderColor: 'white',
-    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.4, shadowRadius: 4, elevation: 5,
   },
   markerSelected: {
-    backgroundColor: COLORS.mint,
     transform: [{ scale: 1.25 }],
-    shadowColor: COLORS.mint,
   },
   markerText: { color: 'white', fontSize: 13, fontWeight: '800' },
   callout: { paddingHorizontal: 10, paddingVertical: 4 },

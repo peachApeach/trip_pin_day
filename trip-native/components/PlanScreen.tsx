@@ -4,7 +4,7 @@ import {
   StyleSheet, ActivityIndicator, Platform,
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
-import { COLORS } from '../constants'
+import { COLORS, PLACE_COLORS } from '../constants'
 import type { Place, TravelMode, TravelSegment } from '../types'
 
 interface Props {
@@ -35,13 +35,7 @@ const DURATION_OPTIONS = [
   { label: '4시간', value: 240 },
 ] as const
 
-const CARD_COLORS = [
-  { bg: '#FFE8EE', dot: COLORS.primary },
-  { bg: '#E0F7F5', dot: COLORS.mint },
-  { bg: '#FFF8E1', dot: '#FFB300' },
-  { bg: '#EDE7F6', dot: '#7C4DFF' },
-  { bg: '#E8F5E9', dot: '#43A047' },
-]
+const CARD_COLORS = PLACE_COLORS
 
 const TRAVEL_MODES: { key: TravelMode; icon: string; label: string }[] = [
   { key: 'DRIVING', icon: '🚗', label: '자동차' },

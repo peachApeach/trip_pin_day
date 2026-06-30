@@ -1,5 +1,13 @@
 export const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string
 
+export const PLACE_COLORS = [
+  { bg: '#FFE8EE', dot: '#FF6B8A' },
+  { bg: '#E0F7F5', dot: '#4ECDC4' },
+  { bg: '#FFF8E1', dot: '#FFB300' },
+  { bg: '#EDE7F6', dot: '#7C4DFF' },
+  { bg: '#E8F5E9', dot: '#43A047' },
+]
+
 export const COLORS = {
   primary: '#FF6B8A',
   primaryLight: '#FFE8EE',
