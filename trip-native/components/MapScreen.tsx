@@ -193,7 +193,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
             key={place.id}
             coordinate={{ latitude: place.lat, longitude: place.lng }}
             anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={isSelected}
+            tracksViewChanges
             onPress={() => {
               onMarkerPress(place.id)
               mapRef.current?.animateToRegion({
