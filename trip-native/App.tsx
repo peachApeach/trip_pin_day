@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   View, Text, TouchableOpacity,
-  StyleSheet, StatusBar, Platform,
+  StyleSheet, StatusBar, Platform, BackHandler,
 } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import MapScreen from './components/MapScreen'
@@ -21,6 +21,15 @@ export default function App() {
   const [travelSegments, setTravelSegments] = useState<(TravelSegment | null)[]>([])
   const [segmentsLoading, setSegmentsLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!activeTrip) return
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setActiveTrip(null)
+      return true
+    })
+    return () => sub.remove()
+  }, [activeTrip])
 
   useEffect(() => {
     AsyncStorage.getItem('trips').then((json) => {
