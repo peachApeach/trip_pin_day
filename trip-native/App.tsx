@@ -168,7 +168,8 @@ export default function App() {
               selectedPlaceId={selectedPlaceId}
               focusPlaceId={focusPlaceId}
               onMapPress={handleMapPress}
-              onMarkerPress={(id) => { setSelectedPlaceId(id) }}
+              onMarkerPress={(id) => setSelectedPlaceId(id || null)}
+              onRemove={handleRemove}
             />
             {places.length === 0 && (
               <View style={styles.mapHint}>

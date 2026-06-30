@@ -14,6 +14,7 @@ interface Props {
   focusPlaceId: number | null
   onMapPress: (info: { lat: number; lng: number; name: string; address: string }) => void
   onMarkerPress: (id: number) => void
+  onRemove: (id: number) => void
 }
 
 interface SearchResult {
@@ -30,7 +31,7 @@ const INITIAL_REGION: Region = {
   longitudeDelta: 0.05,
 }
 
-export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMapPress, onMarkerPress }: Props) {
+export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMapPress, onMarkerPress, onRemove }: Props) {
   const mapRef = useRef<MapView>(null)
 
   useEffect(() => {
@@ -149,6 +150,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
 
   const handleMapPress = async (e: MapPressEvent) => {
     if (showModal) return
+    onMarkerPress(0)  // 선택 해제
     const { latitude, longitude } = e.nativeEvent.coordinate
     try {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
@@ -185,10 +187,13 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
         {places.map((place, index) => {
           const dotColor = PLACE_COLORS[index % PLACE_COLORS.length].dot
           const isSelected = selectedPlaceId === place.id
+          const size = isSelected ? 44 : 32
           return (
           <Marker
             key={place.id}
             coordinate={{ latitude: place.lat, longitude: place.lng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={isSelected}
             onPress={() => {
               onMarkerPress(place.id)
               mapRef.current?.animateToRegion({
@@ -199,12 +204,16 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
               }, 400)
             }}
           >
-            <View style={[
-              styles.marker,
-              { backgroundColor: dotColor, shadowColor: dotColor },
-              isSelected && styles.markerSelected,
-            ]}>
-              <Text style={[styles.markerText, isSelected && styles.markerTextSelected]}>
+            <View style={{
+              width: size, height: size, borderRadius: size / 2,
+              backgroundColor: dotColor,
+              justifyContent: 'center', alignItems: 'center',
+              borderWidth: isSelected ? 3 : 2.5, borderColor: 'white',
+              shadowColor: dotColor,
+              shadowOffset: { width: 0, height: 3 },
+              shadowOpacity: 0.5, shadowRadius: 4, elevation: 6,
+            }}>
+              <Text style={{ color: 'white', fontSize: isSelected ? 16 : 13, fontWeight: '800' }}>
                 {index + 1}
               </Text>
             </View>
@@ -240,7 +249,37 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
         {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
       </View>
 
-      {/* preview 장소 정보 카드 */}
+      {/* 기존 핀 선택 카드 */}
+      {selectedPlaceId && !previewMarker && (() => {
+        const idx = places.findIndex(p => p.id === selectedPlaceId)
+        const place = places[idx]
+        if (!place) return null
+        const dotColor = PLACE_COLORS[idx % PLACE_COLORS.length].dot
+        return (
+          <View style={styles.previewCard}>
+            <View style={[styles.previewCardInner, { borderColor: dotColor }]}>
+              <View style={[styles.previewCardDot, { backgroundColor: dotColor }]} />
+              <View style={styles.previewCardTexts}>
+                <Text style={styles.previewCardName} numberOfLines={1}>{place.name}</Text>
+                {!!place.address && (
+                  <Text style={styles.previewCardAddr} numberOfLines={1}>{place.address}</Text>
+                )}
+              </View>
+              <TouchableOpacity
+                style={[styles.previewCardAddBtn, { backgroundColor: '#FF5252' }]}
+                onPress={() => { onRemove(place.id); onMarkerPress(0) }}
+              >
+                <Text style={styles.previewCardAddText}>🗑 삭제</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onMarkerPress(0)} style={styles.previewCardClose}>
+                <Text style={styles.previewCardCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )
+      })()}
+
+      {/* 새 장소 preview 카드 */}
       {previewMarker && (
         <View style={styles.previewCard}>
           <View style={styles.previewCardInner}>
@@ -327,19 +366,6 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  marker: {
-    width: 32, height: 32, borderRadius: 16,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2.5, borderColor: 'white',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4, shadowRadius: 4, elevation: 5,
-  },
-  markerSelected: {
-    transform: [{ scale: 1.5 }],
-    borderWidth: 3,
-  },
-  markerText: { color: 'white', fontSize: 13, fontWeight: '800' },
-  markerTextSelected: { fontSize: 14 },
 
   searchWrapper: {
     position: 'absolute', top: 14, left: 14, right: 14,
