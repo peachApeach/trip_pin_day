@@ -181,7 +181,6 @@ export default function App() {
               selectedPlaceId={selectedPlaceId}
               onSelect={setSelectedPlaceId}
               onRemove={handleRemove}
-              onUpdateName={handleUpdateName}
               onUpdateDuration={handleUpdateDuration}
               onShowMap={() => setActiveTab('map')}
               startDate={startDate}

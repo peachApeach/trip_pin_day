@@ -12,7 +12,6 @@ interface Props {
   selectedPlaceId: number | null
   onSelect: (id: number) => void
   onRemove: (id: number) => void
-  onUpdateName: (id: number, name: string) => void
   onUpdateDuration: (id: number, duration: number) => void
   onShowMap: () => void
   startDate: Date
@@ -69,7 +68,7 @@ function formatDuration(minutes: number) {
 type PickerMode = 'time' | 'tripStart' | 'tripEnd' | null
 
 export default function PlanScreen({
-  places, selectedPlaceId, onSelect, onRemove, onUpdateName, onUpdateDuration, onShowMap,
+  places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onShowMap,
   startDate, onStartDateChange, travelMode, onTravelModeChange,
   travelSegments, segmentsLoading,
   tripStartDate, tripEndDate, onTripDatesChange,
@@ -239,13 +238,9 @@ export default function PlanScreen({
                     <View style={[styles.indexBadge, { backgroundColor: color.bg }]}>
                       <Text style={[styles.indexText, { color: color.dot }]}>{index + 1}</Text>
                     </View>
-                    <TextInput
-                      style={styles.nameInput}
-                      value={item.name}
-                      onChangeText={text => onUpdateName(item.id, text)}
-                      placeholder="장소 이름"
-                      placeholderTextColor="#ccc"
-                    />
+                    <TouchableOpacity style={styles.nameBtn} onPress={() => { onSelect(item.id); onShowMap() }}>
+                      <Text style={styles.nameText} numberOfLines={1}>{item.name}</Text>
+                    </TouchableOpacity>
                     <Text style={[styles.durationChip, { color: color.dot }]}>
                       {formatDuration(item.duration)}
                     </Text>
@@ -396,7 +391,8 @@ const styles = StyleSheet.create({
   placeCardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   indexBadge: { width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
   indexText: { fontSize: 11, fontWeight: '800' },
-  nameInput: { flex: 1, fontSize: 14, fontWeight: '700', color: COLORS.text, padding: 0 },
+  nameBtn: { flex: 1 },
+  nameText: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   durationChip: { fontSize: 11, fontWeight: '700' },
   removeText: { fontSize: 13, color: '#D0D0D0' },
   address: { fontSize: 11, color: COLORS.textSub },
