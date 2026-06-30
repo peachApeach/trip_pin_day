@@ -14,6 +14,7 @@ interface Props {
   onRemove: (id: number) => void
   onUpdateDuration: (id: number, duration: number) => void
   onShowMap: () => void
+  onFocusPlace: (id: number) => void
   startDate: Date
   onStartDateChange: (date: Date) => void
   travelMode: TravelMode
@@ -68,7 +69,7 @@ function formatDuration(minutes: number) {
 type PickerMode = 'time' | 'tripStart' | 'tripEnd' | null
 
 export default function PlanScreen({
-  places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onShowMap,
+  places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onShowMap, onFocusPlace,
   startDate, onStartDateChange, travelMode, onTravelModeChange,
   travelSegments, segmentsLoading,
   tripStartDate, tripEndDate, onTripDatesChange,
@@ -238,7 +239,7 @@ export default function PlanScreen({
                     <View style={[styles.indexBadge, { backgroundColor: color.bg }]}>
                       <Text style={[styles.indexText, { color: color.dot }]}>{index + 1}</Text>
                     </View>
-                    <TouchableOpacity style={styles.nameBtn} onPress={() => { onSelect(item.id); onShowMap() }}>
+                    <TouchableOpacity style={styles.nameBtn} onPress={() => { onSelect(item.id); onFocusPlace(item.id); onShowMap() }}>
                       <Text style={styles.nameText} numberOfLines={1}>{item.name}</Text>
                     </TouchableOpacity>
                     <Text style={[styles.durationChip, { color: color.dot }]}>

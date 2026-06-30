@@ -18,6 +18,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState<TabKey>('map')
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
+  const [focusPlaceId, setFocusPlaceId] = useState<number | null>(null)
   const [travelSegments, setTravelSegments] = useState<(TravelSegment | null)[]>([])
   const [segmentsLoading, setSegmentsLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -165,6 +166,7 @@ export default function App() {
             <MapScreen
               places={places}
               selectedPlaceId={selectedPlaceId}
+              focusPlaceId={focusPlaceId}
               onMapPress={handleMapPress}
               onMarkerPress={(id) => { setSelectedPlaceId(id); setActiveTab('plan') }}
             />
@@ -183,6 +185,7 @@ export default function App() {
               onRemove={handleRemove}
               onUpdateDuration={handleUpdateDuration}
               onShowMap={() => setActiveTab('map')}
+              onFocusPlace={(id) => { setFocusPlaceId(id); setActiveTab('map') }}
               startDate={startDate}
               onStartDateChange={handleStartDateChange}
               travelMode={travelMode}

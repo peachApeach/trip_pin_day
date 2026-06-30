@@ -11,6 +11,7 @@ import type { Place } from '../types'
 interface Props {
   places: Place[]
   selectedPlaceId: number | null
+  focusPlaceId: number | null
   onMapPress: (info: { lat: number; lng: number; name: string; address: string }) => void
   onMarkerPress: (id: number) => void
 }
@@ -29,8 +30,20 @@ const INITIAL_REGION: Region = {
   longitudeDelta: 0.05,
 }
 
-export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarkerPress }: Props) {
+export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMapPress, onMarkerPress }: Props) {
   const mapRef = useRef<MapView>(null)
+
+  useEffect(() => {
+    if (!focusPlaceId) return
+    const place = places.find(p => p.id === focusPlaceId)
+    if (!place) return
+    mapRef.current?.animateToRegion({
+      latitude: place.lat,
+      longitude: place.lng,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    }, 500)
+  }, [focusPlaceId])
 
   const handleMapReady = async () => {
     if (places.length > 0) {
