@@ -204,18 +204,20 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
               }, 400)
             }}
           >
-            <View style={{
-              width: size, height: size, borderRadius: size / 2,
-              backgroundColor: dotColor,
-              justifyContent: 'center', alignItems: 'center',
-              borderWidth: isSelected ? 3 : 2.5, borderColor: 'white',
-              shadowColor: dotColor,
-              shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.5, shadowRadius: 4, elevation: 6,
-            }}>
-              <Text style={{ color: 'white', fontSize: isSelected ? 16 : 13, fontWeight: '800' }}>
-                {index + 1}
-              </Text>
+            <View style={{ padding: 6 }}>
+              <View style={{
+                width: size, height: size, borderRadius: size / 2,
+                backgroundColor: dotColor,
+                justifyContent: 'center', alignItems: 'center',
+                borderWidth: isSelected ? 3 : 2.5, borderColor: 'white',
+                shadowColor: dotColor,
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.5, shadowRadius: 4, elevation: 6,
+              }}>
+                <Text style={{ color: 'white', fontSize: isSelected ? 16 : 13, fontWeight: '800' }}>
+                  {index + 1}
+                </Text>
+              </View>
             </View>
           </Marker>
         )})}
