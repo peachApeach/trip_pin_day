@@ -204,16 +204,13 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
               }, 400)
             }}
           >
-            <View style={{
-              width: size + 6, height: size + 6, borderRadius: (size + 6) / 2,
-              backgroundColor: dotColor + '40',
-              justifyContent: 'center', alignItems: 'center',
-            }}>
+            <View style={{ overflow: 'visible', alignItems: 'center', justifyContent: 'center' }}>
               <View style={{
                 width: size, height: size, borderRadius: size / 2,
                 backgroundColor: dotColor,
                 justifyContent: 'center', alignItems: 'center',
                 borderWidth: isSelected ? 3 : 2.5, borderColor: 'white',
+                overflow: 'visible',
               }}>
                 <Text style={{ color: 'white', fontSize: isSelected ? 16 : 13, fontWeight: '800' }}>
                   {index + 1}
