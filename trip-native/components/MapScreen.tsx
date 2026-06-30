@@ -33,6 +33,15 @@ export default function MapScreen({ places, selectedPlaceId, onMapPress, onMarke
   const mapRef = useRef<MapView>(null)
 
   useEffect(() => {
+    if (places.length > 0) {
+      mapRef.current?.animateToRegion({
+        latitude: places[0].lat,
+        longitude: places[0].lng,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      }, 800)
+      return
+    }
     ;(async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()
       if (status !== 'granted') return
