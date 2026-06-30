@@ -192,7 +192,6 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
           <Marker
             key={place.id}
             coordinate={{ latitude: place.lat, longitude: place.lng }}
-            anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges
             onPress={() => {
               onMarkerPress(place.id)
@@ -205,20 +204,14 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
             }}
           >
             <View style={{
-              width: size + 24, height: size + 24,
-              alignItems: 'center', justifyContent: 'center',
-              backgroundColor: 'transparent',
+              width: size, height: size, borderRadius: size / 2,
+              backgroundColor: dotColor,
+              justifyContent: 'center', alignItems: 'center',
+              borderWidth: isSelected ? 3 : 2.5, borderColor: 'white',
             }}>
-              <View style={{
-                width: size, height: size, borderRadius: size / 2,
-                backgroundColor: dotColor,
-                justifyContent: 'center', alignItems: 'center',
-                borderWidth: isSelected ? 3 : 2.5, borderColor: 'white',
-              }}>
-                <Text style={{ color: 'white', fontSize: isSelected ? 16 : 13, fontWeight: '800' }}>
-                  {index + 1}
-                </Text>
-              </View>
+              <Text style={{ color: 'white', fontSize: isSelected ? 16 : 13, fontWeight: '800' }}>
+                {index + 1}
+              </Text>
             </View>
           </Marker>
         )})}
