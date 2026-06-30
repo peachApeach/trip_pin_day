@@ -24,4 +24,4 @@ export interface TravelSegment {
 
 export type TravelMode = 'DRIVING' | 'TRANSIT' | 'WALKING' | 'BICYCLING'
 
-export type TabKey = 'map' | 'list' | 'timetable'
+export type TabKey = 'map' | 'plan'

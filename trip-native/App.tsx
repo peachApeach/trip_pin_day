@@ -6,25 +6,22 @@ import {
 } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import MapScreen from './components/MapScreen'
-import PlaceList from './components/PlaceList'
-import Timetable from './components/Timetable'
+import PlanScreen from './components/PlanScreen'
 import TripListScreen from './components/TripListScreen'
 import { fetchTravelSegments } from './utils/distanceMatrix'
 import { COLORS } from './constants'
-import type { Trip, Place, TravelMode, TravelSegment, TabKey } from './types'
-
-interface Tab {
-  key: TabKey
-  icon: string
-  label: string
-}
+import type { Trip, TravelMode, TravelSegment, TabKey } from './types'
 
 export default function App() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabKey>('map')
+  const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
+  const [travelSegments, setTravelSegments] = useState<(TravelSegment | null)[]>([])
+  const [segmentsLoading, setSegmentsLoading] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // 앱 시작 시 저장된 데이터 불러오기
   useEffect(() => {
     AsyncStorage.getItem('trips').then((json) => {
       if (json) setTrips(JSON.parse(json))
@@ -32,20 +29,10 @@ export default function App() {
     }).catch(() => setLoaded(true))
   }, [])
 
-  // trips 변경 시 저장
   useEffect(() => {
     if (!loaded) return
     AsyncStorage.setItem('trips', JSON.stringify(trips)).catch(() => {})
   }, [trips, loaded])
-  const [activeTab, setActiveTab] = useState<TabKey>('map')
-  const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
-  const [travelSegments, setTravelSegments] = useState<(TravelSegment | null)[]>([])
-  const [segmentsLoading, setSegmentsLoading] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const places = activeTrip?.places ?? []
-  const startDate = activeTrip ? new Date(activeTrip.startDate) : (() => { const d = new Date(); d.setHours(9,0,0,0); return d })()
-  const travelMode = activeTrip?.travelMode ?? 'DRIVING'
 
   useEffect(() => {
     const currentPlaces = activeTrip?.places ?? []
@@ -93,19 +80,23 @@ export default function App() {
     updateTrip((t) => ({ ...t, travelMode: mode }))
   }, [updateTrip])
 
+  const handleTripDatesChange = useCallback((start: string | null, end: string | null) => {
+    updateTrip((t) => ({ ...t, tripStartDate: start, tripEndDate: end }))
+  }, [updateTrip])
+
   const handleAddTrip = (title: string, tripStartDate: string | null, tripEndDate: string | null) => {
     const d = new Date(); d.setHours(9, 0, 0, 0)
-    const newTrip: Trip = { id: Date.now(), title, places: [], startDate: d.toISOString(), travelMode: 'DRIVING', tripStartDate, tripEndDate }
+    const newTrip: Trip = {
+      id: Date.now(), title, places: [],
+      startDate: d.toISOString(), travelMode: 'DRIVING',
+      tripStartDate, tripEndDate,
+    }
     setTrips((prev) => [...prev, newTrip])
     setActiveTrip(newTrip)
     setActiveTab('map')
     setSelectedPlaceId(null)
     setTravelSegments([])
   }
-
-  const handleTripDatesChange = useCallback((start: string | null, end: string | null) => {
-    updateTrip((t) => ({ ...t, tripStartDate: start, tripEndDate: end }))
-  }, [updateTrip])
 
   const handleDeleteTrip = (id: number) => {
     setTrips((prev) => prev.filter((t) => t.id !== id))
@@ -118,13 +109,8 @@ export default function App() {
     setTravelSegments([])
   }
 
-  const handleBackToList = () => {
-    setActiveTrip(null)
-  }
-
   if (!loaded) return null
 
-  // 홈 화면 (여행 목록)
   if (!activeTrip) {
     return (
       <SafeAreaProvider>
@@ -141,10 +127,13 @@ export default function App() {
     )
   }
 
-  const TABS: Tab[] = [
-    { key: 'map', icon: '🗺️', label: '지도' },
-    { key: 'list', icon: '📍', label: `장소 (${places.length})` },
-    { key: 'timetable', icon: '🕐', label: '일정' },
+  const places = activeTrip.places
+  const startDate = new Date(activeTrip.startDate)
+  const travelMode = activeTrip.travelMode
+
+  const TABS = [
+    { key: 'map' as TabKey, icon: '🗺️', label: '지도' },
+    { key: 'plan' as TabKey, icon: '📋', label: `일정 (${places.length})` },
   ]
 
   return (
@@ -153,7 +142,7 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
 
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={handleBackToList}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => setActiveTrip(null)}>
             <Text style={styles.backIcon}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.tripTitle} numberOfLines={1}>{activeTrip.title}</Text>
@@ -168,7 +157,7 @@ export default function App() {
               places={places}
               selectedPlaceId={selectedPlaceId}
               onMapPress={handleMapPress}
-              onMarkerPress={(id) => { setSelectedPlaceId(id); setActiveTab('list') }}
+              onMarkerPress={(id) => { setSelectedPlaceId(id); setActiveTab('plan') }}
             />
             {places.length === 0 && (
               <View style={styles.mapHint}>
@@ -177,8 +166,8 @@ export default function App() {
             )}
           </View>
 
-          {activeTab === 'list' && (
-            <PlaceList
+          {activeTab === 'plan' && (
+            <PlanScreen
               places={places}
               selectedPlaceId={selectedPlaceId}
               onSelect={setSelectedPlaceId}
@@ -186,12 +175,6 @@ export default function App() {
               onUpdateName={handleUpdateName}
               onUpdateDuration={handleUpdateDuration}
               onShowMap={() => setActiveTab('map')}
-            />
-          )}
-
-          {activeTab === 'timetable' && (
-            <Timetable
-              places={places}
               startDate={startDate}
               onStartDateChange={handleStartDateChange}
               travelMode={travelMode}
