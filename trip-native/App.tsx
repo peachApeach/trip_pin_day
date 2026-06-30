@@ -168,7 +168,7 @@ export default function App() {
               selectedPlaceId={selectedPlaceId}
               focusPlaceId={focusPlaceId}
               onMapPress={handleMapPress}
-              onMarkerPress={(id) => { setSelectedPlaceId(id); setActiveTab('plan') }}
+              onMarkerPress={(id) => { setSelectedPlaceId(id) }}
             />
             {places.length === 0 && (
               <View style={styles.mapHint}>

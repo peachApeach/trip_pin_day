@@ -3,7 +3,7 @@ import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, Keyboard, FlatList,
 } from 'react-native'
-import MapView, { Marker, Callout, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
+import MapView, { Marker, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { GOOGLE_MAPS_API_KEY, COLORS, PLACE_COLORS } from '../constants'
 import type { Place } from '../types'
@@ -184,20 +184,30 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
 
         {places.map((place, index) => {
           const dotColor = PLACE_COLORS[index % PLACE_COLORS.length].dot
+          const isSelected = selectedPlaceId === place.id
           return (
           <Marker
             key={place.id}
             coordinate={{ latitude: place.lat, longitude: place.lng }}
-            onPress={() => onMarkerPress(place.id)}
+            onPress={() => {
+              onMarkerPress(place.id)
+              mapRef.current?.animateToRegion({
+                latitude: place.lat,
+                longitude: place.lng,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+              }, 400)
+            }}
           >
-            <View style={[styles.marker, { backgroundColor: dotColor, shadowColor: dotColor }, selectedPlaceId === place.id && styles.markerSelected]}>
-              <Text style={styles.markerText}>{index + 1}</Text>
+            <View style={[
+              styles.marker,
+              { backgroundColor: dotColor, shadowColor: dotColor },
+              isSelected && styles.markerSelected,
+            ]}>
+              <Text style={[styles.markerText, isSelected && styles.markerTextSelected]}>
+                {index + 1}
+              </Text>
             </View>
-            <Callout>
-              <View style={styles.callout}>
-                <Text style={styles.calloutText}>{place.name}</Text>
-              </View>
-            </Callout>
           </Marker>
         )})}
       </MapView>
@@ -325,11 +335,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4, shadowRadius: 4, elevation: 5,
   },
   markerSelected: {
-    transform: [{ scale: 1.25 }],
+    transform: [{ scale: 1.5 }],
+    borderWidth: 3,
   },
   markerText: { color: 'white', fontSize: 13, fontWeight: '800' },
-  callout: { paddingHorizontal: 10, paddingVertical: 4 },
-  calloutText: { fontSize: 13, fontWeight: '600', color: COLORS.text },
+  markerTextSelected: { fontSize: 14 },
 
   searchWrapper: {
     position: 'absolute', top: 14, left: 14, right: 14,
