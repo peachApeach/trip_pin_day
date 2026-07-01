@@ -8,6 +8,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import MapScreen from './components/MapScreen'
 import PlanScreen from './components/PlanScreen'
 import TripListScreen from './components/TripListScreen'
+import TripOverviewScreen from './components/TripOverviewScreen'
 import { fetchTravelSegments } from './utils/distanceMatrix'
 import { COLORS } from './constants'
 import type { Trip, TravelMode, TravelSegment, TabKey } from './types'
@@ -15,6 +16,7 @@ import type { Trip, TravelMode, TravelSegment, TabKey } from './types'
 export default function App() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
+  const [overviewTrip, setOverviewTrip] = useState<Trip | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState<TabKey>('map')
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
@@ -24,13 +26,18 @@ export default function App() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    if (!activeTrip) return
+    if (!activeTrip && !overviewTrip) return
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      setActiveTrip(null)
+      if (activeTrip) {
+        setOverviewTrip(trips.find(t => t.id === activeTrip.id) ?? null)
+        setActiveTrip(null)
+      } else if (overviewTrip) {
+        setOverviewTrip(null)
+      }
       return true
     })
     return () => sub.remove()
-  }, [activeTrip])
+  }, [activeTrip, overviewTrip, trips])
 
   useEffect(() => {
     AsyncStorage.getItem('trips').then((json) => {
@@ -113,15 +120,20 @@ export default function App() {
   }
 
   const handleSelectTrip = (trip: Trip) => {
+    setOverviewTrip(trip)
+  }
+
+  const handleEnterTrip = (trip: Trip, dayIndex: number | null) => {
+    setOverviewTrip(null)
     setActiveTrip(trip)
-    setActiveTab('map')
+    setActiveTab('plan')
     setSelectedPlaceId(null)
     setTravelSegments([])
   }
 
   if (!loaded) return null
 
-  if (!activeTrip) {
+  if (!activeTrip && !overviewTrip) {
     return (
       <SafeAreaProvider>
         <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -131,6 +143,21 @@ export default function App() {
             onSelect={handleSelectTrip}
             onAdd={handleAddTrip}
             onDelete={handleDeleteTrip}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    )
+  }
+
+  if (overviewTrip && !activeTrip) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+          <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+          <TripOverviewScreen
+            trip={overviewTrip}
+            onEnter={(dayIndex) => handleEnterTrip(overviewTrip, dayIndex)}
+            onBack={() => setOverviewTrip(null)}
           />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -152,7 +179,10 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
 
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => setActiveTrip(null)}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => {
+            setOverviewTrip(trips.find(t => t.id === activeTrip!.id) ?? null)
+            setActiveTrip(null)
+          }}>
             <Text style={styles.backIcon}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.tripTitle} numberOfLines={1}>{activeTrip.title}</Text>
@@ -243,7 +273,7 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   mapWrapper: {
     flex: 1, position: 'relative',
-    margin: 16, borderRadius: 24, overflow: 'hidden',
+    margin: 16, borderRadius: 24,
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,

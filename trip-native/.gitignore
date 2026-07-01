@@ -30,9 +30,13 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# KakaoTalk photos
+KakaoTalk_Photo*
+
 # local env files
 .env
 .env*.local
+app.json
 
 # typescript
 *.tsbuildinfo

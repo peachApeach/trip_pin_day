@@ -33,6 +33,12 @@ const INITIAL_REGION: Region = {
 
 export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMapPress, onMarkerPress, onRemove }: Props) {
   const mapRef = useRef<MapView>(null)
+  const markerPressedRef = useRef(false)
+  const geocodeIdRef = useRef(0)
+
+  useEffect(() => {
+    if (selectedPlaceId) setPreviewMarker(null)
+  }, [selectedPlaceId])
 
   useEffect(() => {
     if (!focusPlaceId) return
@@ -150,18 +156,22 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
 
   const handleMapPress = async (e: MapPressEvent) => {
     if (showModal) return
+    if (markerPressedRef.current) { markerPressedRef.current = false; return }
     onMarkerPress(0)  // 선택 해제
     const { latitude, longitude } = e.nativeEvent.coordinate
+    setPreviewMarker({ lat: latitude, lng: longitude, name: '선택한 장소', address: '' })
+    const id = ++geocodeIdRef.current
     try {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
+      if (id !== geocodeIdRef.current) return
       const result = data?.results?.[0]
       const name: string = result?.address_components?.[0]?.long_name ?? '선택한 장소'
       const address: string = result?.formatted_address ?? ''
       setPreviewMarker({ lat: latitude, lng: longitude, name, address })
     } catch {
-      setPreviewMarker({ lat: latitude, lng: longitude, name: '선택한 장소', address: '' })
+      // 이미 기본값으로 세팅돼 있으니 그대로 둠
     }
   }
 
@@ -177,7 +187,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
         showsUserLocation
         showsMyLocationButton
       >
-        {previewMarker && (
+        {previewMarker && !selectedPlaceId && (
           <Marker
             coordinate={{ latitude: previewMarker.lat, longitude: previewMarker.lng }}
             pinColor={COLORS.mint}
@@ -187,32 +197,52 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
         {places.map((place, index) => {
           const dotColor = PLACE_COLORS[index % PLACE_COLORS.length].dot
           const isSelected = selectedPlaceId === place.id
-          const size = isSelected ? 44 : 32
           return (
           <Marker
-            key={place.id}
+            key={`${place.id}-${isSelected}`}
             coordinate={{ latitude: place.lat, longitude: place.lng }}
-            tracksViewChanges
+            tracksViewChanges={true}
+            anchor={isSelected ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 1 }}
             onPress={() => {
+              markerPressedRef.current = true
+              setTimeout(() => { markerPressedRef.current = false }, 300)
+              geocodeIdRef.current++
               onMarkerPress(place.id)
-              mapRef.current?.animateToRegion({
-                latitude: place.lat,
-                longitude: place.lng,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
-              }, 400)
+              setPreviewMarker(null)
             }}
           >
-            <View style={{
-              width: size, height: size, borderRadius: size / 2,
-              backgroundColor: dotColor,
-              justifyContent: 'center', alignItems: 'center',
-              borderWidth: isSelected ? 3 : 2.5, borderColor: 'white',
-            }}>
-              <Text style={{ color: 'white', fontSize: isSelected ? 16 : 13, fontWeight: '800' }}>
-                {index + 1}
-              </Text>
-            </View>
+            {isSelected ? (
+              // 뱃지 — 바깥 사각형 래퍼, borderRadius 없음
+              <View collapsable={false} style={{ padding: 4 }}>
+                <View collapsable={false} style={{
+                  paddingHorizontal: 8, paddingVertical: 4,
+                  backgroundColor: 'white',
+                  borderRadius: 10,
+                  borderWidth: 2,
+                  borderColor: dotColor,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Text style={{ color: dotColor, fontSize: 12, fontWeight: '800' }}>{index + 1}</Text>
+                </View>
+              </View>
+            ) : (
+              // 핀 — 원 + 삼각형, borderRadius 없는 column
+              <View collapsable={false} style={{ alignItems: 'center' }}>
+                <View collapsable={false} style={{
+                  width: 30, height: 30, borderRadius: 15,
+                  backgroundColor: dotColor,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Text style={{ color: 'white', fontSize: 12, fontWeight: '800' }}>{index + 1}</Text>
+                </View>
+                <View style={{
+                  width: 0, height: 0,
+                  borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10,
+                  borderLeftColor: 'transparent', borderRightColor: 'transparent',
+                  borderTopColor: dotColor,
+                }} />
+              </View>
+            )}
           </Marker>
         )})}
       </MapView>

@@ -5,14 +5,16 @@
 ## 주요 기능
 
 - **여행 목록** — 여러 여행 계획을 관리, 여행 추가/삭제
-- **장소 검색** — 검색창에 입력 → 결과 목록 팝업 → 선택 시 지도 이동 + 하단 카드 표시 (무한 스크롤 지원)
+- **여행 Overview** — 여행 클릭 시 일자별 탭 + 전체 일정 지도 미리보기
+- **장소 검색** — 검색창 입력 → 결과 목록 팝업 → 선택 시 지도 이동 + 하단 카드 표시 (무한 스크롤 지원)
 - **지도 탭** — 지도 빈 곳 또는 구글 POI 핀을 탭하면 하단 카드 표시
 - **장소 추가** — 하단 카드의 **+ 추가** 버튼을 눌러야만 장소 추가 (실수 추가 방지)
-- **장소 목록** — 장소 이름 수정, 체류 시간 설정, 순서 확인
+- **컬러 마커** — 핀 모양 기본 마커, 선택 시 뱃지 형태로 전환
 - **타임테이블** — 출발 시간 + 이동 수단 선택 → 체류/이동 시간 합산 자동 일정 생성
 - **이동 수단** — 자동차 / 대중교통 / 도보 / 자전거
 - **탭 전환 시 지도 상태 유지** — 검색 결과, 지도 위치, 줌 레벨 그대로 유지
 - **현재 위치 자동 이동** — 앱 실행 시 내 위치 기준으로 지도 표시
+- **데이터 영구 저장** — AsyncStorage로 앱 재시작 후에도 여행 데이터 유지
 
 ## 기술 스택
 
@@ -57,10 +59,10 @@ EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=여기에_구글맵_API_키_입력
 npx expo start
 ```
 
-터미널에 QR 코드가 뜨면 폰에서 **Expo Go** 앱으로 스캔해서 실행합니다.
+터미널에 QR 코드가 뜨면 폰에서 **Expo Dev Client** 앱(또는 Expo Go)으로 스캔해서 실행합니다.
 
 - iOS: 카메라 앱으로 QR 스캔
-- Android: Expo Go 앱 안에서 QR 스캔
+- Android: Expo Dev Client 앱 안에서 QR 스캔
 
 > 폰과 개발 PC가 **같은 Wi-Fi**에 연결되어 있어야 합니다.  
 > 같은 네트워크가 아닐 경우 `npx expo start --tunnel` 로 실행하세요.
@@ -82,16 +84,16 @@ npx expo start
 
 ```
 trip-native/
-├── App.tsx                  # 루트 컴포넌트, 여행 목록 ↔ 여행 화면 전환
-├── types.ts                 # 공유 타입 정의 (Trip, Place, TravelSegment 등)
-├── constants.ts             # 컬러 팔레트, API 키
+├── App.tsx                      # 루트 컴포넌트, 화면 전환 및 상태 관리
+├── types.ts                     # 공유 타입 정의 (Trip, Place, TravelSegment 등)
+├── constants.ts                 # 컬러 팔레트, API 키
 ├── components/
-│   ├── TripListScreen.tsx   # 여행 목록 홈 화면
-│   ├── MapScreen.tsx        # 지도, 마커, 검색, POI 탭, preview 카드
-│   ├── PlaceList.tsx        # 장소 목록, 체류 시간 설정
-│   └── Timetable.tsx        # 타임테이블, 이동 수단 선택
+│   ├── TripListScreen.tsx       # 여행 목록 홈 화면
+│   ├── TripOverviewScreen.tsx   # 여행 overview (일자별 탭 + 지도 미리보기)
+│   ├── MapScreen.tsx            # 지도, 마커, 검색, POI 탭, preview 카드
+│   └── PlanScreen.tsx           # 장소 목록 + 타임테이블 통합 화면
 └── utils/
-    └── distanceMatrix.ts    # Google Distance Matrix API 호출
+    └── distanceMatrix.ts        # Google Distance Matrix API 호출
 ```
 
 ## 환경 변수

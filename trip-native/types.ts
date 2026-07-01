@@ -15,6 +15,7 @@ export interface Place {
   lng: number
   address: string
   duration: number
+  dayIndex?: number
 }
 
 export interface TravelSegment {
