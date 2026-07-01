@@ -61,7 +61,7 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>{trip.title}</Text>
         <TouchableOpacity style={styles.enterBtn} onPress={() => onEnter(selectedDay)}>
-          <Text style={styles.enterBtnText}>일정 편집 →</Text>
+          <Text style={styles.enterBtnText}>일정 상세 →</Text>
         </TouchableOpacity>
       </View>
 
@@ -158,6 +158,9 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
         {visiblePlaces.length === 0 && (
           <View style={styles.mapEmpty}>
             <Text style={styles.mapEmptyText}>이 날 장소가 없어요</Text>
+            <TouchableOpacity style={styles.mapEmptyBtn} onPress={() => onEnter(selectedDay)}>
+              <Text style={styles.mapEmptyBtnText}>+ 일정 추가하기</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -165,13 +168,13 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
       {/* 장소 목록 */}
       <ScrollView style={styles.placeList} contentContainerStyle={styles.placeListContent}>
         {visiblePlaces.length === 0 ? (
-          <Text style={styles.placeEmptyText}>일정 편집에서 장소를 추가해보세요</Text>
+          <Text style={styles.placeEmptyText}>일정 상세에서 장소를 추가해보세요</Text>
         ) : (
           visiblePlaces.map((place, idx) => {
             const globalIdx = trip.places.indexOf(place)
             const color = PLACE_COLORS[globalIdx % PLACE_COLORS.length]
             return (
-              <View key={place.id} style={styles.placeRow}>
+              <TouchableOpacity key={place.id} style={styles.placeRow} onPress={() => onEnter(selectedDay)} activeOpacity={0.75}>
                 <View style={[styles.placeNum, { backgroundColor: color.bg }]}>
                   <Text style={[styles.placeNumText, { color: color.dot }]}>{globalIdx + 1}</Text>
                 </View>
@@ -179,7 +182,8 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
                   <Text style={styles.placeName} numberOfLines={1}>{place.name}</Text>
                   {!!place.address && <Text style={styles.placeAddr} numberOfLines={1}>{place.address}</Text>}
                 </View>
-              </View>
+                <Text style={styles.placeArrow}>›</Text>
+              </TouchableOpacity>
             )
           })
         )}
@@ -239,9 +243,14 @@ const styles = StyleSheet.create({
   mapEmpty: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F5F5F5', gap: 12,
   },
   mapEmptyText: { fontSize: 13, color: COLORS.textSub },
+  mapEmptyBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20,
+  },
+  mapEmptyBtnText: { color: 'white', fontSize: 13, fontWeight: '700' },
 
   placeList: { flex: 1 },
   placeListContent: { paddingHorizontal: 16, paddingBottom: 24, gap: 8 },
@@ -255,6 +264,7 @@ const styles = StyleSheet.create({
   placeNum: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   placeNumText: { fontSize: 12, fontWeight: '800' },
   placeInfo: { flex: 1 },
+  placeArrow: { fontSize: 20, color: '#D0D0D0' },
   placeName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   placeAddr: { fontSize: 11, color: COLORS.textSub, marginTop: 2 },
 })
