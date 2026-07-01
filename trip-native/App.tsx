@@ -53,7 +53,10 @@ export default function App() {
   }, [trips, loaded])
 
   useEffect(() => {
-    const currentPlaces = (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex)
+    const dayPlaces = (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex)
+    const prevPlaces = activeDayIndex > 0 ? (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
+    const prevLast = prevPlaces.length > 0 ? prevPlaces[prevPlaces.length - 1] : null
+    const currentPlaces = prevLast ? [prevLast, ...dayPlaces] : dayPlaces
     const currentMode = activeTrip?.travelMode ?? 'DRIVING'
     const currentSegmentModes = (activeTrip?.segmentModes ?? {})[activeDayIndex] ?? []
     if (currentPlaces.length < 2) { setTravelSegments([]); return }
@@ -110,8 +113,14 @@ export default function App() {
   const handleSegmentModeChange = useCallback((segIdx: number, mode: TravelMode) => {
     updateTrip((t) => {
       const all = { ...(t.segmentModes ?? {}) }
+      // segIdx -1은 전날→오늘 첫 구간 (index 0으로 저장)
+      const realIdx = segIdx === -1 ? 0 : segIdx + (activeDayIndex > 0 ? 1 : 0)
       const dayModes = [...(all[activeDayIndex] ?? [])]
-      dayModes[segIdx] = mode
+      if (segIdx === -1) {
+        dayModes[0] = mode
+      } else {
+        dayModes[segIdx] = mode
+      }
       all[activeDayIndex] = dayModes
       return { ...t, segmentModes: all }
     })
@@ -187,6 +196,8 @@ export default function App() {
 
   const allPlaces = activeTrip.places
   const places = allPlaces.filter(p => (p.dayIndex ?? 0) === activeDayIndex)
+  const prevDayPlaces = activeDayIndex > 0 ? allPlaces.filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
+  const prevDayLastPlace = prevDayPlaces.length > 0 ? prevDayPlaces[prevDayPlaces.length - 1] : null
   const startDate = new Date(activeTrip.startDate)
   const travelMode = activeTrip.travelMode
 
@@ -271,6 +282,7 @@ export default function App() {
               onUpdateDayIndex={handleUpdateDayIndex}
               onSegmentModeChange={handleSegmentModeChange}
               segmentModes={(activeTrip.segmentModes ?? {})[activeDayIndex] ?? []}
+              prevDayLastPlace={prevDayLastPlace}
               onShowMap={() => setActiveTab('map')}
               onFocusPlace={(id) => { setFocusPlaceId(id); setActiveTab('map') }}
               startDate={startDate}

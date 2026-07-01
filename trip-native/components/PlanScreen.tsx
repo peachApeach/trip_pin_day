@@ -15,6 +15,7 @@ interface Props {
   onUpdateDuration: (id: number, duration: number) => void
   onUpdateDayIndex: (id: number, dayIndex: number) => void
   onSegmentModeChange: (segIdx: number, mode: TravelMode) => void
+  prevDayLastPlace: Place | null
   onShowMap: () => void
   onFocusPlace: (id: number) => void
   startDate: Date
@@ -79,7 +80,7 @@ function calcTotalDays(start: string | null, end: string | null): number {
 
 export default function PlanScreen({
   places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onUpdateDayIndex,
-  onSegmentModeChange, onShowMap, onFocusPlace,
+  onSegmentModeChange, prevDayLastPlace, onShowMap, onFocusPlace,
   startDate, onStartDateChange, travelMode, onTravelModeChange,
   travelSegments, segmentsLoading, segmentModes,
   tripStartDate, tripEndDate, onTripDatesChange,
@@ -87,13 +88,16 @@ export default function PlanScreen({
   const [pickerMode, setPickerMode] = useState<PickerMode>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
-  // 타임라인 계산
+  // 타임라인 계산 (prevDayLastPlace 있으면 travelSegments[0]이 전날→오늘 구간)
+  const segOffset = prevDayLastPlace ? 1 : 0
+  const firstSeg = prevDayLastPlace ? travelSegments[0] : null
   let currentTime = new Date(startDate)
+  if (firstSeg) currentTime = addMinutes(currentTime, firstSeg.duration)
   const schedule = places.map((place, index) => {
     const from = new Date(currentTime)
     currentTime = addMinutes(currentTime, place.duration)
     const to = new Date(currentTime)
-    const seg = travelSegments[index]
+    const seg = travelSegments[index + segOffset]
     let travelTo: TravelSegment | null = null
     if (seg && index < places.length - 1) {
       travelTo = seg
@@ -227,6 +231,61 @@ export default function PlanScreen({
 
       {/* 타임라인 + 장소 카드 */}
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+        {/* 전날 마지막 장소 + 이동 구간 */}
+        {prevDayLastPlace && (
+          <>
+            <View style={styles.timelineRow}>
+              <View style={styles.timelineLeft}>
+                <Text style={styles.timeText}>{formatTime(startDate)}</Text>
+                <View style={[styles.timelineDot, { backgroundColor: '#9E9E9E' }]} />
+                <View style={styles.timelineLine} />
+              </View>
+              <View style={[styles.placeCard, { borderLeftColor: '#9E9E9E', opacity: 0.65 }]}>
+                <View style={styles.placeCardTop}>
+                  <View style={[styles.indexBadge, { backgroundColor: '#F5F5F5' }]}>
+                    <Text style={[styles.indexText, { color: '#9E9E9E' }]}>전</Text>
+                  </View>
+                  <Text style={[styles.nameText, { color: '#9E9E9E', flex: 1 }]} numberOfLines={1}>{prevDayLastPlace.name}</Text>
+                  <Text style={{ fontSize: 10, color: '#BDBDBD' }}>전날 도착지</Text>
+                </View>
+              </View>
+            </View>
+            {/* 전날 → 오늘 이동 구간 */}
+            <View style={styles.timelineRow}>
+              <View style={styles.timelineLeft}>
+                <Text style={styles.travelTimeText}>{formatTime(startDate)}</Text>
+                <View style={styles.travelDot} />
+                <View style={styles.timelineLine} />
+              </View>
+              <View style={styles.travelCard}>
+                <View style={styles.segModeRow}>
+                  {TRAVEL_MODES.map(m => {
+                    const isActive = (segmentModes[0] ?? travelMode) === m.key
+                    return (
+                      <TouchableOpacity
+                        key={m.key}
+                        style={[styles.segModeBtn, isActive && styles.segModeBtnActive]}
+                        onPress={() => onSegmentModeChange(-1, m.key)}
+                      >
+                        <Text style={styles.segModeIcon}>{m.icon}</Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+                {firstSeg ? (
+                  <View style={styles.segInfo}>
+                    <Text style={styles.travelDuration}>이동 {formatDuration(firstSeg.duration)}</Text>
+                    <Text style={styles.travelDistance}>{firstSeg.distance}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.segInfo}>
+                    <Text style={styles.segInfoEmpty}>이동수단을 선택하면 계산돼요</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </>
+        )}
         {schedule.map((item, index) => {
           const color = CARD_COLORS[index % CARD_COLORS.length]
           const isExpanded = expandedId === item.id
