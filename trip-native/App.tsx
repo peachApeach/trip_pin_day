@@ -89,6 +89,10 @@ export default function App() {
     updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, duration } : p) }))
   }, [updateTrip])
 
+  const handleUpdateDayIndex = useCallback((id: number, dayIndex: number) => {
+    updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, dayIndex } : p) }))
+  }, [updateTrip])
+
   const handleStartDateChange = useCallback((date: Date) => {
     updateTrip((t) => ({ ...t, startDate: date.toISOString() }))
   }, [updateTrip])
@@ -120,6 +124,7 @@ export default function App() {
   }
 
   const handleSelectTrip = (trip: Trip) => {
+    setActiveTrip(null)
     setOverviewTrip(trip)
   }
 
@@ -130,6 +135,8 @@ export default function App() {
     setSelectedPlaceId(null)
     setTravelSegments([])
   }
+
+
 
   if (!loaded) return null
 
@@ -149,7 +156,7 @@ export default function App() {
     )
   }
 
-  if (overviewTrip && !activeTrip) {
+  if (overviewTrip) {
     return (
       <SafeAreaProvider>
         <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -169,8 +176,8 @@ export default function App() {
   const travelMode = activeTrip.travelMode
 
   const TABS = [
-    { key: 'map' as TabKey, icon: '🗺️', label: '지도' },
     { key: 'plan' as TabKey, icon: '📋', label: `일정 (${places.length})` },
+    { key: 'map' as TabKey, icon: '🗺️', label: '지도' },
   ]
 
   return (
@@ -215,6 +222,7 @@ export default function App() {
               onSelect={setSelectedPlaceId}
               onRemove={handleRemove}
               onUpdateDuration={handleUpdateDuration}
+              onUpdateDayIndex={handleUpdateDayIndex}
               onShowMap={() => setActiveTab('map')}
               onFocusPlace={(id) => { setFocusPlaceId(id); setActiveTab('map') }}
               startDate={startDate}

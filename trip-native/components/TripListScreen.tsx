@@ -41,11 +41,11 @@ export default function TripListScreen({ trips, onSelect, onAdd, onDelete }: Pro
 
   const handleAdd = () => {
     const trimmed = title.trim()
-    if (!trimmed) return
+    if (!trimmed || !tripStart || !tripEnd) return
     onAdd(
       trimmed,
-      tripStart ? tripStart.toISOString() : null,
-      tripEnd ? tripEnd.toISOString() : null,
+      tripStart.toISOString(),
+      tripEnd.toISOString(),
     )
     setTitle('')
     setTripStart(null)
@@ -153,9 +153,9 @@ export default function TripListScreen({ trips, onSelect, onAdd, onDelete }: Pro
               <Text style={styles.addCardCancelText}>취소</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.addCardConfirm, !title.trim() && styles.addCardConfirmDisabled]}
+              style={[styles.addCardConfirm, (!title.trim() || !tripStart || !tripEnd) && styles.addCardConfirmDisabled]}
               onPress={handleAdd}
-              disabled={!title.trim()}
+              disabled={!title.trim() || !tripStart || !tripEnd}
             >
               <Text style={styles.addCardConfirmText}>만들기</Text>
             </TouchableOpacity>
@@ -194,9 +194,7 @@ export default function TripListScreen({ trips, onSelect, onAdd, onDelete }: Pro
                     <View style={styles.cardTexts}>
                       <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
                       <Text style={styles.cardMeta}>
-                        {item.tripStartDate
-                          ? `${formatDate(item.tripStartDate)} ~ ${formatDate(item.tripEndDate)}${nights ? `  ${nights}` : ''}`
-                          : item.places.length > 0 ? `장소 ${item.places.length}곳` : '날짜 미정'}
+                        {`${formatDate(item.tripStartDate)} ~ ${formatDate(item.tripEndDate)}${nights ? `  ${nights}` : ''}`}
                       </Text>
                     </View>
                     <TouchableOpacity

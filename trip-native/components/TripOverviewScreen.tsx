@@ -17,8 +17,7 @@ function formatDate(iso: string | null, offset = 0): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-function calcDays(start: string | null, end: string | null): number {
-  if (!start || !end) return 1
+function calcDays(start: string, end: string): number {
   const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
   return Math.max(1, diff + 1)
 }
@@ -27,7 +26,7 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const mapRef = useRef<MapView>(null)
 
-  const totalDays = calcDays(trip.tripStartDate, trip.tripEndDate)
+  const totalDays = calcDays(trip.tripStartDate!, trip.tripEndDate!)
   const days = Array.from({ length: totalDays }, (_, i) => i)
 
   const visiblePlaces = selectedDay === null

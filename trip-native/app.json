@@ -10,9 +10,14 @@
       "supportsTablet": true,
       "config": {
         "googleMapsApiKey": "YOUR_IOS_GOOGLE_MAPS_API_KEY_HERE"
+      },
+      "bundleIdentifier": "com.evidnet.pinday",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.evidnet.pinday",
       "config": {
         "googleMaps": {
           "apiKey": "YOUR_ANDROID_GOOGLE_MAPS_API_KEY_HERE"
@@ -23,7 +28,11 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,6 +46,12 @@
           "locationAlwaysAndWhenInUsePermission": "앱이 지도에서 현재 위치를 표시하기 위해 위치 정보를 사용합니다."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4a815da3-118b-4cb2-ae45-e212c056ea8d"
+      }
+    },
+    "owner": "peachapeach"
   }
 }

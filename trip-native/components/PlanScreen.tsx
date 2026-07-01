@@ -13,6 +13,7 @@ interface Props {
   onSelect: (id: number) => void
   onRemove: (id: number) => void
   onUpdateDuration: (id: number, duration: number) => void
+  onUpdateDayIndex: (id: number, dayIndex: number) => void
   onShowMap: () => void
   onFocusPlace: (id: number) => void
   startDate: Date
@@ -68,8 +69,14 @@ function formatDuration(minutes: number) {
 
 type PickerMode = 'time' | 'tripStart' | 'tripEnd' | null
 
+function calcTotalDays(start: string | null, end: string | null): number {
+  if (!start || !end) return 1
+  const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
+  return Math.max(1, diff + 1)
+}
+
 export default function PlanScreen({
-  places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onShowMap, onFocusPlace,
+  places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onUpdateDayIndex, onShowMap, onFocusPlace,
   startDate, onStartDateChange, travelMode, onTravelModeChange,
   travelSegments, segmentsLoading,
   tripStartDate, tripEndDate, onTripDatesChange,
@@ -258,30 +265,56 @@ export default function PlanScreen({
                     <Text style={styles.placeTime}>{formatTime(item.from)} ~ {formatTime(item.to)}</Text>
                   </View>
 
-                  {/* 체류시간 선택 (펼쳐졌을 때) */}
+                  {/* 체류시간 + Day 선택 (펼쳐졌을 때) */}
                   {isExpanded && (
-                    <View style={styles.durationRow}>
-                      <Text style={styles.durationLabel}>체류 시간</Text>
-                      <View style={styles.durationButtons}>
-                        {DURATION_OPTIONS.map(opt => (
-                          <TouchableOpacity
-                            key={opt.value}
-                            style={[
-                              styles.durationBtn,
-                              item.duration === opt.value && { backgroundColor: color.dot, borderColor: color.dot },
-                            ]}
-                            onPress={() => onUpdateDuration(item.id, opt.value)}
-                          >
-                            <Text style={[
-                              styles.durationBtnText,
-                              item.duration === opt.value && styles.durationBtnTextActive,
-                            ]}>
-                              {opt.label}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
+                    <>
+                      <View style={styles.durationRow}>
+                        <Text style={styles.durationLabel}>체류 시간</Text>
+                        <View style={styles.durationButtons}>
+                          {DURATION_OPTIONS.map(opt => (
+                            <TouchableOpacity
+                              key={opt.value}
+                              style={[
+                                styles.durationBtn,
+                                item.duration === opt.value && { backgroundColor: color.dot, borderColor: color.dot },
+                              ]}
+                              onPress={() => onUpdateDuration(item.id, opt.value)}
+                            >
+                              <Text style={[
+                                styles.durationBtnText,
+                                item.duration === opt.value && styles.durationBtnTextActive,
+                              ]}>
+                                {opt.label}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
                       </View>
-                    </View>
+                      <View style={styles.durationRow}>
+                        <Text style={styles.durationLabel}>날짜</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <View style={styles.durationButtons}>
+                            {Array.from({ length: calcTotalDays(tripStartDate, tripEndDate) }, (_, d) => (
+                              <TouchableOpacity
+                                key={d}
+                                style={[
+                                  styles.durationBtn,
+                                  (item.dayIndex ?? 0) === d && { backgroundColor: color.dot, borderColor: color.dot },
+                                ]}
+                                onPress={() => onUpdateDayIndex(item.id, d)}
+                              >
+                                <Text style={[
+                                  styles.durationBtnText,
+                                  (item.dayIndex ?? 0) === d && styles.durationBtnTextActive,
+                                ]}>
+                                  Day {d + 1}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </ScrollView>
+                      </View>
+                    </>
                   )}
                 </TouchableOpacity>
               </View>
