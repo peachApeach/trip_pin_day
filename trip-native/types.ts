@@ -4,6 +4,7 @@ export interface Trip {
   places: Place[]
   startDate: string
   travelMode: TravelMode
+  segmentModes: TravelMode[]
   tripStartDate: string | null
   tripEndDate: string | null
 }
@@ -21,6 +22,7 @@ export interface Place {
 export interface TravelSegment {
   duration: number
   distance: string
+  mode: TravelMode
 }
 
 export type TravelMode = 'DRIVING' | 'TRANSIT' | 'WALKING' | 'BICYCLING'

@@ -14,6 +14,7 @@ interface Props {
   onRemove: (id: number) => void
   onUpdateDuration: (id: number, duration: number) => void
   onUpdateDayIndex: (id: number, dayIndex: number) => void
+  onSegmentModeChange: (segIdx: number, mode: TravelMode) => void
   onShowMap: () => void
   onFocusPlace: (id: number) => void
   startDate: Date
@@ -22,6 +23,7 @@ interface Props {
   onTravelModeChange: (mode: TravelMode) => void
   travelSegments: (TravelSegment | null)[]
   segmentsLoading: boolean
+  segmentModes: TravelMode[]
   tripStartDate: string | null
   tripEndDate: string | null
   onTripDatesChange: (start: string | null, end: string | null) => void
@@ -76,9 +78,10 @@ function calcTotalDays(start: string | null, end: string | null): number {
 }
 
 export default function PlanScreen({
-  places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onUpdateDayIndex, onShowMap, onFocusPlace,
+  places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onUpdateDayIndex,
+  onSegmentModeChange, onShowMap, onFocusPlace,
   startDate, onStartDateChange, travelMode, onTravelModeChange,
-  travelSegments, segmentsLoading,
+  travelSegments, segmentsLoading, segmentModes,
   tripStartDate, tripEndDate, onTripDatesChange,
 }: Props) {
   const [pickerMode, setPickerMode] = useState<PickerMode>(null)
@@ -91,9 +94,9 @@ export default function PlanScreen({
     currentTime = addMinutes(currentTime, place.duration)
     const to = new Date(currentTime)
     const seg = travelSegments[index]
-    let travelTo: { duration: number; distance: string } | null = null
+    let travelTo: TravelSegment | null = null
     if (seg && index < places.length - 1) {
-      travelTo = { duration: seg.duration, distance: seg.distance }
+      travelTo = seg
       currentTime = addMinutes(currentTime, seg.duration)
     }
     return { ...place, from, to, travelTo }
@@ -290,37 +293,13 @@ export default function PlanScreen({
                           ))}
                         </View>
                       </View>
-                      <View style={styles.durationRow}>
-                        <Text style={styles.durationLabel}>날짜</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          <View style={styles.durationButtons}>
-                            {Array.from({ length: calcTotalDays(tripStartDate, tripEndDate) }, (_, d) => (
-                              <TouchableOpacity
-                                key={d}
-                                style={[
-                                  styles.durationBtn,
-                                  (item.dayIndex ?? 0) === d && { backgroundColor: color.dot, borderColor: color.dot },
-                                ]}
-                                onPress={() => onUpdateDayIndex(item.id, d)}
-                              >
-                                <Text style={[
-                                  styles.durationBtnText,
-                                  (item.dayIndex ?? 0) === d && styles.durationBtnTextActive,
-                                ]}>
-                                  Day {d + 1}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        </ScrollView>
-                      </View>
                     </>
                   )}
                 </TouchableOpacity>
               </View>
 
               {/* 이동 구간 */}
-              {item.travelTo && (
+              {index < places.length - 1 && (
                 <View style={styles.timelineRow}>
                   <View style={styles.timelineLeft}>
                     <Text style={styles.travelTimeText}>{formatTime(item.to)}</Text>
@@ -328,9 +307,32 @@ export default function PlanScreen({
                     <View style={styles.timelineLine} />
                   </View>
                   <View style={styles.travelCard}>
-                    <Text style={styles.travelIcon}>{travelIcon}</Text>
-                    <Text style={styles.travelDuration}>이동 {formatDuration(item.travelTo.duration)}</Text>
-                    <Text style={styles.travelDistance}>{item.travelTo.distance}</Text>
+                    {/* 이동수단 선택 버튼 */}
+                    <View style={styles.segModeRow}>
+                      {TRAVEL_MODES.map(m => {
+                        const isActive = (segmentModes[index] ?? travelMode) === m.key
+                        return (
+                          <TouchableOpacity
+                            key={m.key}
+                            style={[styles.segModeBtn, isActive && styles.segModeBtnActive]}
+                            onPress={() => onSegmentModeChange(index, m.key)}
+                          >
+                            <Text style={styles.segModeIcon}>{m.icon}</Text>
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </View>
+                    {/* 계산된 이동시간/거리 */}
+                    {item.travelTo ? (
+                      <View style={styles.segInfo}>
+                        <Text style={styles.travelDuration}>이동 {formatDuration(item.travelTo.duration)}</Text>
+                        <Text style={styles.travelDistance}>{item.travelTo.distance}</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.segInfo}>
+                        <Text style={styles.segInfoEmpty}>이동수단을 선택하면 계산돼요</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               )}
@@ -444,11 +446,21 @@ const styles = StyleSheet.create({
   durationBtnTextActive: { color: 'white' },
 
   travelCard: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    flex: 1, gap: 8,
     backgroundColor: '#FAFAFA', borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8,
     borderWidth: 1, borderColor: '#EBEBEB', borderStyle: 'dashed',
   },
+  segModeRow: { flexDirection: 'row', gap: 6 },
+  segModeBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'white', borderWidth: 1.5, borderColor: '#E0E0E0',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  segModeBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
+  segModeIcon: { fontSize: 16 },
+  segInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  segInfoEmpty: { fontSize: 11, color: '#BDBDBD' },
   travelIcon: { fontSize: 14 },
   travelDuration: { fontSize: 12, fontWeight: '700', color: COLORS.textSub },
   travelDistance: { fontSize: 11, color: '#BDBDBD', marginLeft: 'auto' },

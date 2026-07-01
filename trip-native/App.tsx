@@ -55,11 +55,12 @@ export default function App() {
   useEffect(() => {
     const currentPlaces = (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex)
     const currentMode = activeTrip?.travelMode ?? 'DRIVING'
+    const currentSegmentModes = activeTrip?.segmentModes ?? []
     if (currentPlaces.length < 2) { setTravelSegments([]); return }
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       setSegmentsLoading(true)
-      const segments = await fetchTravelSegments(currentPlaces, currentMode)
+      const segments = await fetchTravelSegments(currentPlaces, currentMode, currentSegmentModes)
       setTravelSegments(segments)
       setSegmentsLoading(false)
     }, 800)
@@ -106,11 +107,20 @@ export default function App() {
     updateTrip((t) => ({ ...t, tripStartDate: start, tripEndDate: end }))
   }, [updateTrip])
 
+  const handleSegmentModeChange = useCallback((segIdx: number, mode: TravelMode) => {
+    updateTrip((t) => {
+      const modes = [...(t.segmentModes ?? [])]
+      modes[segIdx] = mode
+      return { ...t, segmentModes: modes }
+    })
+  }, [updateTrip])
+
   const handleAddTrip = (title: string, tripStartDate: string | null, tripEndDate: string | null) => {
     const d = new Date(); d.setHours(9, 0, 0, 0)
     const newTrip: Trip = {
       id: Date.now(), title, places: [],
       startDate: d.toISOString(), travelMode: 'DRIVING',
+      segmentModes: [],
       tripStartDate, tripEndDate,
     }
     setTrips((prev) => [...prev, newTrip])
@@ -257,6 +267,8 @@ export default function App() {
               onRemove={handleRemove}
               onUpdateDuration={handleUpdateDuration}
               onUpdateDayIndex={handleUpdateDayIndex}
+              onSegmentModeChange={handleSegmentModeChange}
+              segmentModes={activeTrip.segmentModes ?? []}
               onShowMap={() => setActiveTab('map')}
               onFocusPlace={(id) => { setFocusPlaceId(id); setActiveTab('map') }}
               startDate={startDate}
