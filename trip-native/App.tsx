@@ -17,6 +17,7 @@ export default function App() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
   const [overviewTrip, setOverviewTrip] = useState<Trip | null>(null)
+  const [activeDayIndex, setActiveDayIndex] = useState<number>(0)
   const [loaded, setLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState<TabKey>('map')
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
@@ -52,7 +53,7 @@ export default function App() {
   }, [trips, loaded])
 
   useEffect(() => {
-    const currentPlaces = activeTrip?.places ?? []
+    const currentPlaces = (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex)
     const currentMode = activeTrip?.travelMode ?? 'DRIVING'
     if (currentPlaces.length < 2) { setTravelSegments([]); return }
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -62,7 +63,7 @@ export default function App() {
       setTravelSegments(segments)
       setSegmentsLoading(false)
     }, 800)
-  }, [activeTrip])
+  }, [activeTrip, activeDayIndex])
 
   const updateTrip = useCallback((updater: (t: Trip) => Trip) => {
     setActiveTrip((prev) => prev ? updater(prev) : prev)
@@ -72,9 +73,9 @@ export default function App() {
   const handleMapPress = useCallback((info: { lat: number; lng: number; name: string; address: string }) => {
     updateTrip((t) => ({
       ...t,
-      places: [...t.places, { id: Date.now(), name: info.name, lat: info.lat, lng: info.lng, address: info.address, duration: 60 }],
+      places: [...t.places, { id: Date.now(), name: info.name, lat: info.lat, lng: info.lng, address: info.address, duration: 60, dayIndex: activeDayIndex }],
     }))
-  }, [updateTrip])
+  }, [updateTrip, activeDayIndex])
 
   const handleRemove = useCallback((id: number) => {
     updateTrip((t) => ({ ...t, places: t.places.filter((p) => p.id !== id) }))
@@ -131,6 +132,7 @@ export default function App() {
   const handleEnterTrip = (trip: Trip, dayIndex: number | null) => {
     setOverviewTrip(null)
     setActiveTrip(trip)
+    setActiveDayIndex(dayIndex ?? 0)
     setActiveTab('plan')
     setSelectedPlaceId(null)
     setTravelSegments([])
@@ -171,9 +173,24 @@ export default function App() {
     )
   }
 
-  const places = activeTrip.places
+  const allPlaces = activeTrip.places
+  const places = allPlaces.filter(p => (p.dayIndex ?? 0) === activeDayIndex)
   const startDate = new Date(activeTrip.startDate)
   const travelMode = activeTrip.travelMode
+
+  function calcTotalDays(start: string | null, end: string | null) {
+    if (!start || !end) return 1
+    const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
+    return Math.max(1, diff + 1)
+  }
+  const totalDays = calcTotalDays(activeTrip.tripStartDate, activeTrip.tripEndDate)
+
+  function formatDayDate(dayIdx: number) {
+    if (!activeTrip.tripStartDate) return `Day ${dayIdx + 1}`
+    const d = new Date(activeTrip.tripStartDate)
+    d.setDate(d.getDate() + dayIdx)
+    return `${d.getMonth() + 1}/${d.getDate()}`
+  }
 
   const TABS = [
     { key: 'plan' as TabKey, icon: '📋', label: `일정 (${places.length})` },
@@ -193,15 +210,32 @@ export default function App() {
             <Text style={styles.backIcon}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.tripTitle} numberOfLines={1}>{activeTrip.title}</Text>
-          <View style={styles.pinCountBadge}>
-            <Text style={styles.pinCountText}>{places.length}개 장소</Text>
+          <View style={styles.dayNav}>
+            <TouchableOpacity
+              style={[styles.dayNavBtn, activeDayIndex === 0 && styles.dayNavBtnDisabled]}
+              onPress={() => { if (activeDayIndex > 0) { setActiveDayIndex(activeDayIndex - 1); setSelectedPlaceId(null) } }}
+              disabled={activeDayIndex === 0}
+            >
+              <Text style={styles.dayNavArrow}>‹</Text>
+            </TouchableOpacity>
+            <View style={styles.dayNavLabel}>
+              <Text style={styles.dayNavDay}>Day {activeDayIndex + 1}</Text>
+              <Text style={styles.dayNavDate}>{formatDayDate(activeDayIndex)}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.dayNavBtn, activeDayIndex === totalDays - 1 && styles.dayNavBtnDisabled]}
+              onPress={() => { if (activeDayIndex < totalDays - 1) { setActiveDayIndex(activeDayIndex + 1); setSelectedPlaceId(null) } }}
+              disabled={activeDayIndex === totalDays - 1}
+            >
+              <Text style={styles.dayNavArrow}>›</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.content}>
           <View style={[styles.mapWrapper, activeTab !== 'map' && { display: 'none' }]}>
             <MapScreen
-              places={places}
+              places={allPlaces}
               selectedPlaceId={selectedPlaceId}
               focusPlaceId={focusPlaceId}
               onMapPress={handleMapPress}
@@ -273,11 +307,16 @@ const styles = StyleSheet.create({
   },
   backIcon: { fontSize: 22, color: COLORS.primary, fontWeight: '700', lineHeight: 26 },
   tripTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: COLORS.text, letterSpacing: -0.3 },
-  pinCountBadge: {
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20,
+  dayNav: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.primaryLight, borderRadius: 20, paddingHorizontal: 4,
   },
-  pinCountText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  dayNavBtn: { padding: 6 },
+  dayNavBtnDisabled: { opacity: 0.3 },
+  dayNavArrow: { fontSize: 18, color: COLORS.primary, fontWeight: '700' },
+  dayNavLabel: { alignItems: 'center', paddingHorizontal: 4 },
+  dayNavDay: { fontSize: 12, fontWeight: '800', color: COLORS.primary },
+  dayNavDate: { fontSize: 10, color: COLORS.primary, opacity: 0.7 },
   content: { flex: 1 },
   mapWrapper: {
     flex: 1, position: 'relative',
