@@ -23,6 +23,13 @@ function decodePolyline(encoded: string): { latitude: number; longitude: number 
   return points
 }
 
+function straightLine(from: Place, to: Place): { latitude: number; longitude: number }[] {
+  return [
+    { latitude: from.lat, longitude: from.lng },
+    { latitude: to.lat, longitude: to.lng },
+  ]
+}
+
 export async function fetchRoute(
   from: Place,
   to: Place,
@@ -35,9 +42,23 @@ export async function fetchRoute(
     const res = await fetch(url)
     const data = await res.json()
     const poly = data?.routes?.[0]?.overview_polyline?.points
-    if (!poly) return []
+    if (!poly) return straightLine(from, to)
     return decodePolyline(poly)
   } catch {
-    return []
+    return straightLine(from, to)
   }
+}
+
+export async function fetchAllRoutes(
+  places: Place[],
+  defaultMode: TravelMode,
+  segmentModes: TravelMode[]
+): Promise<{ latitude: number; longitude: number }[][]> {
+  if (places.length < 2) return []
+  const results = await Promise.all(
+    places.slice(0, -1).map((place, i) =>
+      fetchRoute(place, places[i + 1], segmentModes[i] ?? defaultMode)
+    )
+  )
+  return results
 }

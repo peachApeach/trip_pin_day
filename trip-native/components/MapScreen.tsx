@@ -12,6 +12,7 @@ interface Props {
   places: Place[]
   selectedPlaceId: number | null
   focusPlaceId: number | null
+  allRoutes: { latitude: number; longitude: number }[][]
   routeCoords: { latitude: number; longitude: number }[]
   routeStatus: 'idle' | 'loading' | 'ok' | 'failed'
   onMapPress: (info: { lat: number; lng: number; name: string; address: string }) => void
@@ -33,7 +34,7 @@ const INITIAL_REGION: Region = {
   longitudeDelta: 0.05,
 }
 
-export default function MapScreen({ places, selectedPlaceId, focusPlaceId, routeCoords, routeStatus, onMapPress, onMarkerPress, onRemove }: Props) {
+export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRoutes, routeCoords, routeStatus, onMapPress, onMarkerPress, onRemove }: Props) {
   const mapRef = useRef<MapView>(null)
   const markerPressedRef = useRef(false)
   const geocodeIdRef = useRef(0)
@@ -203,11 +204,21 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, route
         showsUserLocation
         showsMyLocationButton
       >
+        {allRoutes.map((coords, i) =>
+          coords.length >= 2 ? (
+            <Polyline
+              key={`route-${i}`}
+              coordinates={coords}
+              strokeColor={COLORS.primary + '80'}
+              strokeWidth={3}
+            />
+          ) : null
+        )}
         {routeCoords.length >= 2 && (
           <Polyline
             coordinates={routeCoords}
             strokeColor={COLORS.primary}
-            strokeWidth={4}
+            strokeWidth={5}
           />
         )}
 

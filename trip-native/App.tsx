@@ -10,7 +10,7 @@ import PlanScreen from './components/PlanScreen'
 import TripListScreen from './components/TripListScreen'
 import TripOverviewScreen from './components/TripOverviewScreen'
 import { fetchTravelSegments, fetchSegment } from './utils/distanceMatrix'
-import { fetchRoute } from './utils/directions'
+import { fetchRoute, fetchAllRoutes } from './utils/directions'
 import { COLORS } from './constants'
 import type { Trip, TravelMode, TravelSegment, TabKey } from './types'
 
@@ -25,8 +25,10 @@ export default function App() {
   const [focusPlaceId, setFocusPlaceId] = useState<number | null>(null)
   const [travelSegments, setTravelSegments] = useState<(TravelSegment | null)[]>([])
   const [segmentsLoading, setSegmentsLoading] = useState(false)
+  const [allRoutes, setAllRoutes] = useState<{ latitude: number; longitude: number }[][]>([])
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([])
   const [routeStatus, setRouteStatus] = useState<'idle' | 'loading' | 'ok' | 'failed'>('idle')
+  const routeGenRef = useRef(0)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fetchGenRef = useRef(0)
 
@@ -93,6 +95,22 @@ export default function App() {
       setTravelSegments(segments)
       setSegmentsLoading(false)
     }, 300)
+  }, [activeTrip, activeDayIndex])
+
+  useEffect(() => {
+    const dayPlaces = (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex)
+    const prevPlaces = activeDayIndex > 0 ? (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
+    const prevLast = prevPlaces.length > 0 ? prevPlaces[prevPlaces.length - 1] : null
+    const currentPlaces = prevLast ? [prevLast, ...dayPlaces] : dayPlaces
+    const currentMode = activeTrip?.travelMode ?? 'DRIVING'
+    const raw = (activeTrip?.segmentModes ?? {})[activeDayIndex]
+    const currentSegmentModes: TravelMode[] = Array.isArray(raw) ? raw : []
+    if (currentPlaces.length < 2) { setAllRoutes([]); return }
+    const gen = ++routeGenRef.current
+    fetchAllRoutes(currentPlaces, currentMode, currentSegmentModes).then(routes => {
+      if (routeGenRef.current !== gen) return
+      setAllRoutes(routes)
+    })
   }, [activeTrip, activeDayIndex])
 
   const updateTrip = useCallback((updater: (t: Trip) => Trip) => {
@@ -165,6 +183,7 @@ export default function App() {
       setRouteCoords(coords)
       setRouteStatus('ok')
     } else {
+      setRouteCoords([])
       setRouteStatus('failed')
     }
   }, [])
@@ -182,6 +201,7 @@ export default function App() {
     setActiveTab('map')
     setSelectedPlaceId(null)
     setTravelSegments([])
+    setAllRoutes([])
     setRouteCoords([])
     setRouteStatus('idle')
   }
@@ -202,6 +222,7 @@ export default function App() {
     setActiveTab('plan')
     setSelectedPlaceId(null)
     setTravelSegments([])
+    setAllRoutes([])
     setRouteCoords([])
     setRouteStatus('idle')
   }
@@ -308,6 +329,7 @@ export default function App() {
               places={allPlaces}
               selectedPlaceId={selectedPlaceId}
               focusPlaceId={focusPlaceId}
+              allRoutes={allRoutes}
               routeCoords={routeCoords}
               routeStatus={routeStatus}
               onMapPress={handleMapPress}
