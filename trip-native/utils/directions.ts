@@ -1,7 +1,7 @@
 import { GOOGLE_MAPS_API_KEY as API_KEY } from '../constants'
 import type { Place, TravelMode } from '../types'
 
-const MODE_MAP: Record<TravelMode, string> = {
+const MODE_MAP: Partial<Record<TravelMode, string>> = {
   DRIVING: 'driving',
   TRANSIT: 'transit',
   WALKING: 'walking',
