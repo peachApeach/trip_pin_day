@@ -15,6 +15,7 @@ interface Props {
   onUpdateDuration: (id: number, duration: number) => void
   onUpdateDayIndex: (id: number, dayIndex: number) => void
   onSegmentModeChange: (segIdx: number, mode: TravelMode) => void
+  onSegmentDurationChange: (segIdx: number, duration: number | null) => void
   onSegmentPress: (from: Place, to: Place, mode: TravelMode) => void
   prevDayLastPlace: Place | null
   onShowMap: () => void
@@ -26,6 +27,7 @@ interface Props {
   travelSegments: (TravelSegment | null)[]
   segmentsLoading: boolean
   segmentModes: TravelMode[]
+  segmentDurations: (number | null)[]
   tripStartDate: string | null
   tripEndDate: string | null
   onTripDatesChange: (start: string | null, end: string | null) => void
@@ -47,6 +49,7 @@ const TRAVEL_MODES: { key: TravelMode; icon: string; label: string }[] = [
   { key: 'TRANSIT', icon: '🚇', label: '대중교통' },
   { key: 'WALKING', icon: '🚶', label: '도보' },
   { key: 'BICYCLING', icon: '🚴', label: '자전거' },
+  { key: 'OTHER', icon: '✏️', label: '기타' },
 ]
 
 function addMinutes(date: Date, minutes: number) {
@@ -81,9 +84,9 @@ function calcTotalDays(start: string | null, end: string | null): number {
 
 export default function PlanScreen({
   places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onUpdateDayIndex,
-  onSegmentModeChange, onSegmentPress, prevDayLastPlace, onShowMap, onFocusPlace,
+  onSegmentModeChange, onSegmentDurationChange, onSegmentPress, prevDayLastPlace, onShowMap, onFocusPlace,
   startDate, onStartDateChange, travelMode, onTravelModeChange,
-  travelSegments, segmentsLoading, segmentModes,
+  travelSegments, segmentsLoading, segmentModes, segmentDurations,
   tripStartDate, tripEndDate, onTripDatesChange,
 }: Props) {
   const [pickerMode, setPickerMode] = useState<PickerMode>(null)
@@ -277,6 +280,19 @@ export default function PlanScreen({
                     )
                   })}
                 </View>
+                {(segmentModes[0] ?? travelMode) === 'OTHER' && (
+                  <View style={styles.customDurRow}>
+                    <Text style={styles.customDurLabel}>소요 시간 (분)</Text>
+                    <TextInput
+                      style={styles.customDurInput}
+                      keyboardType="number-pad"
+                      placeholder="예) 45"
+                      placeholderTextColor="#ccc"
+                      value={segmentDurations[0] != null ? String(segmentDurations[0]) : ''}
+                      onChangeText={v => onSegmentDurationChange(-1, v ? parseInt(v) : null)}
+                    />
+                  </View>
+                )}
                 {firstSeg ? (
                   <View style={styles.segInfo}>
                     <Text style={styles.travelDuration}>이동 {formatDuration(firstSeg.duration)}</Text>
@@ -285,7 +301,9 @@ export default function PlanScreen({
                   </View>
                 ) : (
                   <View style={styles.segInfo}>
-                    <Text style={styles.segInfoEmpty}>이동수단을 선택하면 계산돼요</Text>
+                    <Text style={styles.segInfoEmpty}>
+                      {(segmentModes[0] ?? travelMode) === 'OTHER' ? '소요 시간을 입력해주세요' : '이동수단을 선택하면 계산돼요'}
+                    </Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -391,6 +409,20 @@ export default function PlanScreen({
                         )
                       })}
                     </View>
+                    {/* OTHER 모드: 직접 분 입력 */}
+                    {(segmentModes[segOffset + index] ?? travelMode) === 'OTHER' && (
+                      <View style={styles.customDurRow}>
+                        <Text style={styles.customDurLabel}>소요 시간 (분)</Text>
+                        <TextInput
+                          style={styles.customDurInput}
+                          keyboardType="number-pad"
+                          placeholder="예) 45"
+                          placeholderTextColor="#ccc"
+                          value={segmentDurations[segOffset + index] != null ? String(segmentDurations[segOffset + index]) : ''}
+                          onChangeText={v => onSegmentDurationChange(index, v ? parseInt(v) : null)}
+                        />
+                      </View>
+                    )}
                     {/* 계산된 이동시간/거리 */}
                     {item.travelTo ? (
                       <View style={styles.segInfo}>
@@ -400,7 +432,9 @@ export default function PlanScreen({
                       </View>
                     ) : (
                       <View style={styles.segInfo}>
-                        <Text style={styles.segInfoEmpty}>이동수단을 선택하면 계산돼요</Text>
+                        <Text style={styles.segInfoEmpty}>
+                          {(segmentModes[segOffset + index] ?? travelMode) === 'OTHER' ? '소요 시간을 입력해주세요' : '이동수단을 선택하면 계산돼요'}
+                        </Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -529,6 +563,13 @@ const styles = StyleSheet.create({
   },
   segModeBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
   segModeIcon: { fontSize: 16 },
+  customDurRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  customDurLabel: { fontSize: 12, color: COLORS.textSub, fontWeight: '500' },
+  customDurInput: {
+    flex: 1, borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 5,
+    fontSize: 14, fontWeight: '700', color: COLORS.text, textAlign: 'center',
+  },
   segInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   segInfoEmpty: { fontSize: 11, color: '#BDBDBD' },
   travelIcon: { fontSize: 14 },

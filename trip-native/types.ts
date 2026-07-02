@@ -5,6 +5,7 @@ export interface Trip {
   startDate: string
   travelMode: TravelMode
   segmentModes: { [dayIndex: number]: TravelMode[] }
+  segmentDurations: { [dayIndex: number]: (number | null)[] }
   tripStartDate: string | null
   tripEndDate: string | null
 }
@@ -25,6 +26,6 @@ export interface TravelSegment {
   mode: TravelMode
 }
 
-export type TravelMode = 'DRIVING' | 'TRANSIT' | 'WALKING' | 'BICYCLING'
+export type TravelMode = 'DRIVING' | 'TRANSIT' | 'WALKING' | 'BICYCLING' | 'OTHER'
 
 export type TabKey = 'map' | 'plan'

@@ -1,7 +1,7 @@
 import { GOOGLE_MAPS_API_KEY as API_KEY } from '../constants'
 import type { Place, TravelMode, TravelSegment } from '../types'
 
-const MODE_MAP: Record<TravelMode, string> = {
+const MODE_MAP: Partial<Record<TravelMode, string>> = {
   DRIVING: 'driving',
   TRANSIT: 'transit',
   WALKING: 'walking',
@@ -13,6 +13,7 @@ const SPEED_KMH: Record<TravelMode, number> = {
   TRANSIT: 25,
   WALKING: 5,
   BICYCLING: 15,
+  OTHER: 20,
 }
 
 function haversineKm(from: Place, to: Place): number {
@@ -38,8 +39,15 @@ function estimateSegment(from: Place, to: Place, mode: TravelMode): TravelSegmen
 export async function fetchSegment(
   from: Place,
   to: Place,
-  mode: TravelMode
+  mode: TravelMode,
+  customDuration?: number | null
 ): Promise<TravelSegment | null> {
+  if (mode === 'OTHER') {
+    if (!customDuration) return null
+    const km = haversineKm(from, to) * 1.3
+    const distance = km >= 1 ? `${km.toFixed(1)} km` : `${Math.round(km * 1000)} m`
+    return { duration: customDuration, distance, mode }
+  }
   try {
     const origin = `${from.lat},${from.lng}`
     const destination = `${to.lat},${to.lng}`
@@ -54,7 +62,6 @@ export async function fetchSegment(
         mode,
       }
     }
-    // ZERO_RESULTS: 한국 도보/자전거 등 미지원 → 직선거리 추정
     return estimateSegment(from, to, mode)
   } catch {
     return estimateSegment(from, to, mode)
@@ -64,13 +71,15 @@ export async function fetchSegment(
 export async function fetchTravelSegments(
   places: Place[],
   defaultMode: TravelMode,
-  segmentModes?: TravelMode[]
+  segmentModes?: TravelMode[],
+  segmentDurations?: (number | null)[]
 ): Promise<(TravelSegment | null)[]> {
   if (places.length < 2) return []
   const segments: (TravelSegment | null)[] = []
   for (let i = 0; i < places.length - 1; i++) {
     const mode = segmentModes?.[i] ?? defaultMode
-    segments.push(await fetchSegment(places[i], places[i + 1], mode))
+    const customDuration = segmentDurations?.[i] ?? null
+    segments.push(await fetchSegment(places[i], places[i + 1], mode, customDuration))
   }
   return segments
 }

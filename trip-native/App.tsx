@@ -59,6 +59,12 @@ export default function App() {
               Array.isArray(v) ? v.map(m => (typeof m === 'string' && VALID.has(m) ? m : null)) : [],
             ])
           ),
+          segmentDurations: Object.fromEntries(
+            Object.entries(t.segmentDurations ?? {}).map(([k, v]) => [
+              k,
+              Array.isArray(v) ? v.map(d => (typeof d === 'number' ? d : null)) : [],
+            ])
+          ),
         }))
         setTrips(fixed)
         AsyncStorage.setItem('trips', JSON.stringify(fixed)).catch(() => {})
@@ -86,7 +92,9 @@ export default function App() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       setSegmentsLoading(true)
-      const segments = await fetchTravelSegments(currentPlaces, currentMode, currentSegmentModes)
+      const rawDur = (activeTrip?.segmentDurations ?? {})[activeDayIndex]
+      const currentSegmentDurations: (number | null)[] = Array.isArray(rawDur) ? rawDur : []
+      const segments = await fetchTravelSegments(currentPlaces, currentMode, currentSegmentModes, currentSegmentDurations)
       if (fetchGenRef.current !== gen) {
         console.log('[App] stale result dropped, gen:', gen, 'current:', fetchGenRef.current)
         return
@@ -161,7 +169,7 @@ export default function App() {
       const prevPlaces = hasPrevDay ? t.places.filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
       const hasPrevLast = prevPlaces.length > 0
       const all = { ...(t.segmentModes ?? {}) }
-      const VALID_MODES = new Set(['DRIVING', 'TRANSIT', 'WALKING', 'BICYCLING'])
+      const VALID_MODES = new Set(['DRIVING', 'TRANSIT', 'WALKING', 'BICYCLING', 'OTHER'])
       const existing = all[activeDayIndex]
       const dayModes = (Array.isArray(existing) ? existing : []).map((m: unknown) =>
         typeof m === 'string' && VALID_MODES.has(m) ? m as TravelMode : null
@@ -172,6 +180,21 @@ export default function App() {
       dayModes[storeIdx] = mode
       all[activeDayIndex] = dayModes
       return { ...t, segmentModes: all }
+    })
+  }, [updateTrip, activeDayIndex])
+
+  const handleSegmentDurationChange = useCallback((segIdx: number, duration: number | null) => {
+    const hasPrevDay = activeDayIndex > 0
+    updateTrip((t) => {
+      const prevPlaces = hasPrevDay ? t.places.filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
+      const hasPrevLast = prevPlaces.length > 0
+      const all = { ...(t.segmentDurations ?? {}) }
+      const existing = all[activeDayIndex]
+      const dayDurations = Array.isArray(existing) ? [...existing] : []
+      const storeIdx = segIdx === -1 ? 0 : (hasPrevLast ? segIdx + 1 : segIdx)
+      dayDurations[storeIdx] = duration
+      all[activeDayIndex] = dayDurations
+      return { ...t, segmentDurations: all }
     })
   }, [updateTrip, activeDayIndex])
 
@@ -194,7 +217,7 @@ export default function App() {
     const newTrip: Trip = {
       id: Date.now(), title, places: [],
       startDate: d.toISOString(), travelMode: 'DRIVING',
-      segmentModes: {},
+      segmentModes: {}, segmentDurations: {},
       tripStartDate, tripEndDate,
     }
     setTrips((prev) => [...prev, newTrip])
@@ -353,8 +376,10 @@ export default function App() {
               onUpdateDuration={handleUpdateDuration}
               onUpdateDayIndex={handleUpdateDayIndex}
               onSegmentModeChange={handleSegmentModeChange}
+              onSegmentDurationChange={handleSegmentDurationChange}
               onSegmentPress={handleSegmentPress}
               segmentModes={(activeTrip.segmentModes ?? {})[activeDayIndex] ?? []}
+              segmentDurations={(activeTrip.segmentDurations ?? {})[activeDayIndex] ?? []}
               prevDayLastPlace={prevDayLastPlace}
               onShowMap={() => setActiveTab('map')}
               onFocusPlace={(id) => { setFocusPlaceId(id); setActiveTab('map') }}
