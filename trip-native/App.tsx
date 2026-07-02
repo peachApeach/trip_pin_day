@@ -105,7 +105,8 @@ export default function App() {
     const currentMode = activeTrip?.travelMode ?? 'DRIVING'
     const raw = (activeTrip?.segmentModes ?? {})[activeDayIndex]
     const currentSegmentModes: TravelMode[] = Array.isArray(raw) ? raw : []
-    if (currentPlaces.length < 2) { setAllRoutes([]); return }
+    setAllRoutes([])
+    if (currentPlaces.length < 2) return
     const gen = ++routeGenRef.current
     fetchAllRoutes(currentPlaces, currentMode, currentSegmentModes).then(routes => {
       if (routeGenRef.current !== gen) return
