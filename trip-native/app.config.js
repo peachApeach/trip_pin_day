@@ -1,6 +1,6 @@
 module.exports = {
   expo: {
-    name: '핀데이',
+    name: '구르미',
     slug: 'trip-native',
     version: '1.0.0',
     orientation: 'portrait',

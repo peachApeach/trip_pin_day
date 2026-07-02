@@ -82,7 +82,7 @@ export default function TripListScreen({ trips, onSelect, onAdd, onDelete }: Pro
       <View style={styles.header}>
         <View>
           <Text style={styles.headerSub}>내 여행 목록</Text>
-          <Text style={styles.headerTitle}>📍 핀데이</Text>
+          <Text style={styles.headerTitle}>☁️ 구르미</Text>
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={() => setAdding(true)}>
           <Text style={styles.addBtnText}>+ 여행 추가</Text>
