@@ -112,8 +112,6 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
           ref={mapRef}
           style={StyleSheet.absoluteFillObject}
           initialRegion={initialRegion}
-          scrollEnabled={false}
-          zoomEnabled={false}
           rotateEnabled={false}
           pitchEnabled={false}
         >
