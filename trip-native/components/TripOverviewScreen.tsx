@@ -130,7 +130,7 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
               <Marker
                 key={`${place.id}`}
                 coordinate={{ latitude: place.lat, longitude: place.lng }}
-                tracksViewChanges={false}
+                tracksViewChanges={true}
                 anchor={{ x: 0.5, y: 1 }}
               >
                 <View collapsable={false} style={{ alignItems: 'center' }}>
