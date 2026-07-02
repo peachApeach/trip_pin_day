@@ -11,13 +11,13 @@ module.exports = {
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       },
-      bundleIdentifier: 'com.evidnet.pinday',
+      bundleIdentifier: 'com.gurmi.app',
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
       },
     },
     android: {
-      package: 'com.evidnet.pinday',
+      package: 'com.gurmi.app',
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
