@@ -133,22 +133,20 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
                 tracksViewChanges={false}
                 anchor={{ x: 0.5, y: 1 }}
               >
-                <View collapsable={false} style={{ alignItems: 'center', padding: 2 }}>
-                  <View collapsable={false} style={{ alignItems: 'center' }}>
-                    <View collapsable={false} style={{
-                      width: 26, height: 26, borderRadius: 13,
-                      backgroundColor: dotColor,
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Text style={{ color: 'white', fontSize: 10, fontWeight: '800' }}>{globalIdx + 1}</Text>
-                    </View>
-                    <View style={{
-                      width: 0, height: 0,
-                      borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8,
-                      borderLeftColor: 'transparent', borderRightColor: 'transparent',
-                      borderTopColor: dotColor,
-                    }} />
+                <View collapsable={false} style={{ alignItems: 'center' }}>
+                  <View collapsable={false} style={{
+                    width: 26, height: 26, borderRadius: 13,
+                    backgroundColor: dotColor,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text style={{ color: 'white', fontSize: 10, fontWeight: '800' }}>{globalIdx + 1}</Text>
                   </View>
+                  <View style={{
+                    width: 0, height: 0,
+                    borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8,
+                    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+                    borderTopColor: dotColor,
+                  }} />
                 </View>
               </Marker>
             )
