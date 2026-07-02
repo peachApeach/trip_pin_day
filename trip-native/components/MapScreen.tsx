@@ -3,7 +3,7 @@ import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, Keyboard, FlatList,
 } from 'react-native'
-import MapView, { Marker, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
+import MapView, { Marker, Polyline, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { GOOGLE_MAPS_API_KEY, COLORS, PLACE_COLORS } from '../constants'
 import type { Place } from '../types'
@@ -12,6 +12,8 @@ interface Props {
   places: Place[]
   selectedPlaceId: number | null
   focusPlaceId: number | null
+  routeCoords: { latitude: number; longitude: number }[]
+  routeStatus: 'idle' | 'loading' | 'ok' | 'failed'
   onMapPress: (info: { lat: number; lng: number; name: string; address: string }) => void
   onMarkerPress: (id: number) => void
   onRemove: (id: number) => void
@@ -31,7 +33,7 @@ const INITIAL_REGION: Region = {
   longitudeDelta: 0.05,
 }
 
-export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMapPress, onMarkerPress, onRemove }: Props) {
+export default function MapScreen({ places, selectedPlaceId, focusPlaceId, routeCoords, routeStatus, onMapPress, onMarkerPress, onRemove }: Props) {
   const mapRef = useRef<MapView>(null)
   const markerPressedRef = useRef(false)
   const geocodeIdRef = useRef(0)
@@ -51,6 +53,20 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
       longitudeDelta: 0.01,
     }, 500)
   }, [focusPlaceId])
+
+  useEffect(() => {
+    if (routeCoords.length < 2) return
+    const lats = routeCoords.map(c => c.latitude)
+    const lngs = routeCoords.map(c => c.longitude)
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats)
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
+    mapRef.current?.animateToRegion({
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: (maxLat - minLat) * 1.4 + 0.005,
+      longitudeDelta: (maxLng - minLng) * 1.4 + 0.005,
+    }, 600)
+  }, [routeCoords])
 
   const handleMapReady = async () => {
     if (places.length > 0) {
@@ -187,6 +203,14 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
         showsUserLocation
         showsMyLocationButton
       >
+        {routeCoords.length >= 2 && (
+          <Polyline
+            coordinates={routeCoords}
+            strokeColor={COLORS.primary}
+            strokeWidth={4}
+          />
+        )}
+
         {previewMarker && !selectedPlaceId && (
           <Marker
             coordinate={{ latitude: previewMarker.lat, longitude: previewMarker.lng }}
@@ -274,6 +298,19 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, onMap
         </View>
         {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
       </View>
+
+      {/* 경로 상태 배너 */}
+      {routeStatus === 'loading' && (
+        <View style={styles.routeBanner}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.routeBannerText}>경로 불러오는 중...</Text>
+        </View>
+      )}
+      {routeStatus === 'failed' && (
+        <View style={[styles.routeBanner, styles.routeBannerFailed]}>
+          <Text style={styles.routeBannerFailedText}>경로를 찾을 수 없어요</Text>
+        </View>
+      )}
 
       {/* 기존 핀 선택 카드 */}
       {selectedPlaceId && !previewMarker && (() => {
@@ -462,6 +499,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center', paddingVertical: 14, gap: 8,
   },
   loadingMoreText: { fontSize: 12, color: COLORS.textSub },
+
+  routeBanner: {
+    position: 'absolute', top: 72, alignSelf: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1, shadowRadius: 6, elevation: 4,
+  },
+  routeBannerText: { fontSize: 13, color: COLORS.textSub, fontWeight: '500' },
+  routeBannerFailed: { backgroundColor: '#FFF3F3' },
+  routeBannerFailedText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
 
   previewCard: {
     position: 'absolute',

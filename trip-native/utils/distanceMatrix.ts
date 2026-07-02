@@ -8,6 +8,33 @@ const MODE_MAP: Record<TravelMode, string> = {
   BICYCLING: 'bicycling',
 }
 
+const SPEED_KMH: Record<TravelMode, number> = {
+  DRIVING: 40,
+  TRANSIT: 25,
+  WALKING: 5,
+  BICYCLING: 15,
+}
+
+function haversineKm(from: Place, to: Place): number {
+  const R = 6371
+  const dLat = ((to.lat - from.lat) * Math.PI) / 180
+  const dLng = ((to.lng - from.lng) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((from.lat * Math.PI) / 180) *
+      Math.cos((to.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function estimateSegment(from: Place, to: Place, mode: TravelMode): TravelSegment {
+  const speed = SPEED_KMH[mode]
+  const km = haversineKm(from, to) * 1.3 // 실제 경로 보정 30%
+  const duration = Math.ceil((km / speed) * 60)
+  const distance = km >= 1 ? `${km.toFixed(1)} km` : `${Math.round(km * 1000)} m`
+  return { duration, distance, mode }
+}
+
 export async function fetchSegment(
   from: Place,
   to: Place,
@@ -27,9 +54,10 @@ export async function fetchSegment(
         mode,
       }
     }
-    return null
+    // ZERO_RESULTS: 한국 도보/자전거 등 미지원 → 직선거리 추정
+    return estimateSegment(from, to, mode)
   } catch {
-    return null
+    return estimateSegment(from, to, mode)
   }
 }
 

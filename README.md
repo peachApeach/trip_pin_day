@@ -12,7 +12,10 @@
 - **장소 추가** — 하단 카드의 **+ 추가** 버튼을 눌러야만 장소 추가 (실수 추가 방지)
 - **컬러 마커** — 핀 모양 기본 마커, 선택 시 뱃지 형태로 전환
 - **타임테이블** — 출발 시간 + 이동 수단 선택 → 체류/이동 시간 합산 자동 일정 생성
-- **이동 수단** — 자동차 / 대중교통 / 도보 / 자전거
+- **이동 수단** — 자동차 / 대중교통 / 도보 / 자전거 (구간별 개별 설정)
+- **이동 시간/거리 계산** — Google Distance Matrix API, 미지원 구간은 직선거리 추정 fallback
+- **경로 시각화** — 이동 패널 탭 시 지도 탭으로 전환 + Google Directions API 경로 폴리라인 표시
+- **Day별 일정** — 여행 기간에 맞게 Day 자동 생성, 다음날 첫 요소로 전날 마지막 장소 표시
 - **탭 전환 시 지도 상태 유지** — 검색 결과, 지도 위치, 줌 레벨 그대로 유지
 - **현재 위치 자동 이동** — 앱 실행 시 내 위치 기준으로 지도 표시
 - **데이터 영구 저장** — AsyncStorage로 앱 재시작 후에도 여행 데이터 유지
@@ -26,7 +29,7 @@
 | Map | react-native-maps |
 | Safe Area | react-native-safe-area-context |
 | Location | expo-location |
-| API | Google Maps (Places Text Search / Geocoding / Distance Matrix) |
+| API | Google Maps (Places Text Search / Geocoding / Distance Matrix / Directions) |
 
 ## 시작하기
 
@@ -53,6 +56,7 @@ EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=여기에_구글맵_API_키_입력
 > - Places API (Text Search)
 > - Geocoding API
 > - Distance Matrix API
+> - Directions API
 
 ### 3. 앱 실행
 
@@ -94,7 +98,8 @@ trip-native/
 │   ├── MapScreen.tsx            # 지도, 마커, 검색, POI 탭, preview 카드
 │   └── PlanScreen.tsx           # 장소 목록 + 타임테이블 통합 화면
 └── utils/
-    └── distanceMatrix.ts        # Google Distance Matrix API 호출
+    ├── distanceMatrix.ts        # Google Distance Matrix API (이동 시간/거리 계산)
+    └── directions.ts            # Google Directions API (경로 폴리라인)
 ```
 
 ## 환경 변수

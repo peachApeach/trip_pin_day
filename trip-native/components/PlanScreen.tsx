@@ -15,6 +15,7 @@ interface Props {
   onUpdateDuration: (id: number, duration: number) => void
   onUpdateDayIndex: (id: number, dayIndex: number) => void
   onSegmentModeChange: (segIdx: number, mode: TravelMode) => void
+  onSegmentPress: (from: Place, to: Place, mode: TravelMode) => void
   prevDayLastPlace: Place | null
   onShowMap: () => void
   onFocusPlace: (id: number) => void
@@ -80,7 +81,7 @@ function calcTotalDays(start: string | null, end: string | null): number {
 
 export default function PlanScreen({
   places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onUpdateDayIndex,
-  onSegmentModeChange, prevDayLastPlace, onShowMap, onFocusPlace,
+  onSegmentModeChange, onSegmentPress, prevDayLastPlace, onShowMap, onFocusPlace,
   startDate, onStartDateChange, travelMode, onTravelModeChange,
   travelSegments, segmentsLoading, segmentModes,
   tripStartDate, tripEndDate, onTripDatesChange,
@@ -257,7 +258,11 @@ export default function PlanScreen({
                 <View style={styles.travelDot} />
                 <View style={styles.timelineLine} />
               </View>
-              <View style={styles.travelCard}>
+              <TouchableOpacity
+                style={styles.travelCard}
+                onPress={() => firstSeg && places[0] && onSegmentPress(prevDayLastPlace!, places[0], firstSeg.mode)}
+                activeOpacity={firstSeg ? 0.7 : 1}
+              >
                 <View style={styles.segModeRow}>
                   {TRAVEL_MODES.map(m => {
                     const isActive = (segmentModes[0] ?? travelMode) === m.key
@@ -276,13 +281,14 @@ export default function PlanScreen({
                   <View style={styles.segInfo}>
                     <Text style={styles.travelDuration}>이동 {formatDuration(firstSeg.duration)}</Text>
                     <Text style={styles.travelDistance}>{firstSeg.distance}</Text>
+                    <Text style={styles.routeHint}>지도에서 보기 →</Text>
                   </View>
                 ) : (
                   <View style={styles.segInfo}>
                     <Text style={styles.segInfoEmpty}>이동수단을 선택하면 계산돼요</Text>
                   </View>
                 )}
-              </View>
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -365,11 +371,15 @@ export default function PlanScreen({
                     <View style={styles.travelDot} />
                     <View style={styles.timelineLine} />
                   </View>
-                  <View style={styles.travelCard}>
+                  <TouchableOpacity
+                    style={styles.travelCard}
+                    onPress={() => item.travelTo && onSegmentPress(places[index], places[index + 1], item.travelTo.mode)}
+                    activeOpacity={item.travelTo ? 0.7 : 1}
+                  >
                     {/* 이동수단 선택 버튼 */}
                     <View style={styles.segModeRow}>
                       {TRAVEL_MODES.map(m => {
-                        const isActive = (segmentModes[index] ?? travelMode) === m.key
+                        const isActive = (segmentModes[segOffset + index] ?? travelMode) === m.key
                         return (
                           <TouchableOpacity
                             key={m.key}
@@ -386,13 +396,14 @@ export default function PlanScreen({
                       <View style={styles.segInfo}>
                         <Text style={styles.travelDuration}>이동 {formatDuration(item.travelTo.duration)}</Text>
                         <Text style={styles.travelDistance}>{item.travelTo.distance}</Text>
+                        <Text style={styles.routeHint}>지도에서 보기 →</Text>
                       </View>
                     ) : (
                       <View style={styles.segInfo}>
                         <Text style={styles.segInfoEmpty}>이동수단을 선택하면 계산돼요</Text>
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -522,7 +533,8 @@ const styles = StyleSheet.create({
   segInfoEmpty: { fontSize: 11, color: '#BDBDBD' },
   travelIcon: { fontSize: 14 },
   travelDuration: { fontSize: 12, fontWeight: '700', color: COLORS.textSub },
-  travelDistance: { fontSize: 11, color: '#BDBDBD', marginLeft: 'auto' },
+  travelDistance: { fontSize: 11, color: '#BDBDBD' },
+  routeHint: { fontSize: 10, color: COLORS.primary, marginLeft: 'auto', fontWeight: '600' },
 
   endCard: {
     flex: 1, backgroundColor: '#E8F5E9', borderRadius: 16,

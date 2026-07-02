@@ -9,7 +9,8 @@ import MapScreen from './components/MapScreen'
 import PlanScreen from './components/PlanScreen'
 import TripListScreen from './components/TripListScreen'
 import TripOverviewScreen from './components/TripOverviewScreen'
-import { fetchTravelSegments } from './utils/distanceMatrix'
+import { fetchTravelSegments, fetchSegment } from './utils/distanceMatrix'
+import { fetchRoute } from './utils/directions'
 import { COLORS } from './constants'
 import type { Trip, TravelMode, TravelSegment, TabKey } from './types'
 
@@ -24,7 +25,10 @@ export default function App() {
   const [focusPlaceId, setFocusPlaceId] = useState<number | null>(null)
   const [travelSegments, setTravelSegments] = useState<(TravelSegment | null)[]>([])
   const [segmentsLoading, setSegmentsLoading] = useState(false)
+  const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([])
+  const [routeStatus, setRouteStatus] = useState<'idle' | 'loading' | 'ok' | 'failed'>('idle')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fetchGenRef = useRef(0)
 
   useEffect(() => {
     if (!activeTrip && !overviewTrip) return
@@ -42,7 +46,21 @@ export default function App() {
 
   useEffect(() => {
     AsyncStorage.getItem('trips').then((json) => {
-      if (json) setTrips(JSON.parse(json))
+      if (json) {
+        const parsed: Trip[] = JSON.parse(json)
+        const VALID = new Set(['DRIVING', 'TRANSIT', 'WALKING', 'BICYCLING'])
+        const fixed = parsed.map(t => ({
+          ...t,
+          segmentModes: Object.fromEntries(
+            Object.entries(t.segmentModes ?? {}).map(([k, v]) => [
+              k,
+              Array.isArray(v) ? v.map(m => (typeof m === 'string' && VALID.has(m) ? m : null)) : [],
+            ])
+          ),
+        }))
+        setTrips(fixed)
+        AsyncStorage.setItem('trips', JSON.stringify(fixed)).catch(() => {})
+      }
       setLoaded(true)
     }).catch(() => setLoaded(true))
   }, [])
@@ -58,12 +76,20 @@ export default function App() {
     const prevLast = prevPlaces.length > 0 ? prevPlaces[prevPlaces.length - 1] : null
     const currentPlaces = prevLast ? [prevLast, ...dayPlaces] : dayPlaces
     const currentMode = activeTrip?.travelMode ?? 'DRIVING'
-    const currentSegmentModes = (activeTrip?.segmentModes ?? {})[activeDayIndex] ?? []
+    const raw = (activeTrip?.segmentModes ?? {})[activeDayIndex]
+    const currentSegmentModes: TravelMode[] = Array.isArray(raw) ? raw : []
     if (currentPlaces.length < 2) { setTravelSegments([]); return }
+    const gen = ++fetchGenRef.current
+    console.log('[App] trigger gen:', gen, 'places:', currentPlaces.length, 'segmentModes:', JSON.stringify(currentSegmentModes))
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       setSegmentsLoading(true)
       const segments = await fetchTravelSegments(currentPlaces, currentMode, currentSegmentModes)
+      if (fetchGenRef.current !== gen) {
+        console.log('[App] stale result dropped, gen:', gen, 'current:', fetchGenRef.current)
+        return
+      }
+      console.log('[App] travelSegments result gen:', gen, JSON.stringify(segments))
       setTravelSegments(segments)
       setSegmentsLoading(false)
     }, 300)
@@ -111,20 +137,37 @@ export default function App() {
   }, [updateTrip])
 
   const handleSegmentModeChange = useCallback((segIdx: number, mode: TravelMode) => {
+    const hasPrevDay = activeDayIndex > 0
     updateTrip((t) => {
+      const prevPlaces = hasPrevDay ? t.places.filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
+      const hasPrevLast = prevPlaces.length > 0
       const all = { ...(t.segmentModes ?? {}) }
-      // segIdx -1은 전날→오늘 첫 구간 (index 0으로 저장)
-      const realIdx = segIdx === -1 ? 0 : segIdx + (activeDayIndex > 0 ? 1 : 0)
-      const dayModes = [...(all[activeDayIndex] ?? [])]
-      if (segIdx === -1) {
-        dayModes[0] = mode
-      } else {
-        dayModes[segIdx] = mode
-      }
+      const VALID_MODES = new Set(['DRIVING', 'TRANSIT', 'WALKING', 'BICYCLING'])
+      const existing = all[activeDayIndex]
+      const dayModes = (Array.isArray(existing) ? existing : []).map((m: unknown) =>
+        typeof m === 'string' && VALID_MODES.has(m) ? m as TravelMode : null
+      )
+      // segIdx -1: 전날 마지막 → 오늘 첫 구간 → index 0
+      // segIdx >= 0: 오늘 내 구간 → prevLast 있으면 +1 offset
+      const storeIdx = segIdx === -1 ? 0 : (hasPrevLast ? segIdx + 1 : segIdx)
+      dayModes[storeIdx] = mode
       all[activeDayIndex] = dayModes
       return { ...t, segmentModes: all }
     })
   }, [updateTrip, activeDayIndex])
+
+  const handleSegmentPress = useCallback(async (fromPlace: Place, toPlace: Place, mode: TravelMode) => {
+    setActiveTab('map')
+    setRouteCoords([])
+    setRouteStatus('loading')
+    const coords = await fetchRoute(fromPlace, toPlace, mode)
+    if (coords.length >= 2) {
+      setRouteCoords(coords)
+      setRouteStatus('ok')
+    } else {
+      setRouteStatus('failed')
+    }
+  }, [])
 
   const handleAddTrip = (title: string, tripStartDate: string | null, tripEndDate: string | null) => {
     const d = new Date(); d.setHours(9, 0, 0, 0)
@@ -139,6 +182,8 @@ export default function App() {
     setActiveTab('map')
     setSelectedPlaceId(null)
     setTravelSegments([])
+    setRouteCoords([])
+    setRouteStatus('idle')
   }
 
   const handleDeleteTrip = (id: number) => {
@@ -157,6 +202,8 @@ export default function App() {
     setActiveTab('plan')
     setSelectedPlaceId(null)
     setTravelSegments([])
+    setRouteCoords([])
+    setRouteStatus('idle')
   }
 
 
@@ -261,8 +308,10 @@ export default function App() {
               places={allPlaces}
               selectedPlaceId={selectedPlaceId}
               focusPlaceId={focusPlaceId}
+              routeCoords={routeCoords}
+              routeStatus={routeStatus}
               onMapPress={handleMapPress}
-              onMarkerPress={(id) => setSelectedPlaceId(id || null)}
+              onMarkerPress={(id) => { setSelectedPlaceId(id || null); setRouteCoords([]); setRouteStatus('idle') }}
               onRemove={handleRemove}
             />
             {places.length === 0 && (
@@ -281,6 +330,7 @@ export default function App() {
               onUpdateDuration={handleUpdateDuration}
               onUpdateDayIndex={handleUpdateDayIndex}
               onSegmentModeChange={handleSegmentModeChange}
+              onSegmentPress={handleSegmentPress}
               segmentModes={(activeTrip.segmentModes ?? {})[activeDayIndex] ?? []}
               prevDayLastPlace={prevDayLastPlace}
               onShowMap={() => setActiveTab('map')}
