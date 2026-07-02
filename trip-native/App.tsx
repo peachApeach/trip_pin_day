@@ -326,7 +326,7 @@ export default function App() {
         <View style={styles.content}>
           <View style={[styles.mapWrapper, activeTab !== 'map' && { display: 'none' }]}>
             <MapScreen
-              places={allPlaces}
+              places={places}
               selectedPlaceId={selectedPlaceId}
               focusPlaceId={focusPlaceId}
               allRoutes={allRoutes}
