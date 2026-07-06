@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, Platform,
+  StyleSheet, ActivityIndicator, Platform, Linking,
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
 import { COLORS, PLACE_COLORS } from '../constants'
@@ -72,6 +72,16 @@ function formatDuration(minutes: number) {
   if (minutes < 60) return `${minutes}분`
   const h = Math.floor(minutes / 60), m = minutes % 60
   return m > 0 ? `${h}시간 ${m}분` : `${h}시간`
+}
+
+// 제휴 링크 — 실제 파트너스 가입 후 af_id/utm 파라미터 교체
+function getKlookUrl(placeName: string) {
+  const q = encodeURIComponent(placeName)
+  return `https://www.klook.com/ko/search/?query=${q}&af_id=PARTNER_ID`
+}
+function getMrtUrl(placeName: string) {
+  const q = encodeURIComponent(placeName)
+  return `https://www.myrealtrip.com/offers?q=${q}&utm_source=gurmi&utm_medium=app`
 }
 
 type PickerMode = 'time' | 'tripStart' | 'tripEnd' | null
@@ -351,7 +361,7 @@ export default function PlanScreen({
                     <Text style={styles.placeTime}>{formatTime(item.from)} ~ {formatTime(item.to)}</Text>
                   </View>
 
-                  {/* 체류시간 + Day 선택 (펼쳐졌을 때) */}
+                  {/* 체류시간 + 투어 버튼 (펼쳐졌을 때) */}
                   {isExpanded && (
                     <>
                       <View style={styles.durationRow}>
@@ -374,6 +384,23 @@ export default function PlanScreen({
                               </Text>
                             </TouchableOpacity>
                           ))}
+                        </View>
+                      </View>
+                      <View style={styles.tourRow}>
+                        <Text style={styles.tourLabel}>이 장소 근처 투어</Text>
+                        <View style={styles.tourBtns}>
+                          <TouchableOpacity
+                            style={styles.tourBtn}
+                            onPress={() => Linking.openURL(getKlookUrl(item.name))}
+                          >
+                            <Text style={styles.tourBtnText}>🎫 클룩</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.tourBtn, styles.tourBtnMrt]}
+                            onPress={() => Linking.openURL(getMrtUrl(item.name))}
+                          >
+                            <Text style={[styles.tourBtnText, styles.tourBtnMrtText]}>✈️ 마이리얼트립</Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
                     </>
@@ -538,6 +565,17 @@ const styles = StyleSheet.create({
   address: { fontSize: 11, color: COLORS.textSub },
   placeFooter: { flexDirection: 'row', alignItems: 'center' },
   placeTime: { fontSize: 11, color: COLORS.textSub, fontWeight: '500' },
+
+  tourRow: { gap: 6, paddingTop: 4 },
+  tourLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
+  tourBtns: { flexDirection: 'row', gap: 8 },
+  tourBtn: {
+    flex: 1, paddingVertical: 8, borderRadius: 12,
+    backgroundColor: '#FF6B35', alignItems: 'center',
+  },
+  tourBtnMrt: { backgroundColor: '#00B4D8' },
+  tourBtnText: { fontSize: 12, fontWeight: '700', color: 'white' },
+  tourBtnMrtText: { color: 'white' },
 
   durationRow: { gap: 6, paddingTop: 4 },
   durationLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
