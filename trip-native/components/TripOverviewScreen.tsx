@@ -26,7 +26,7 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const mapRef = useRef<MapView>(null)
 
-  const totalDays = calcDays(trip.tripStartDate!, trip.tripEndDate!)
+  const totalDays = trip.tripStartDate && trip.tripEndDate ? calcDays(trip.tripStartDate, trip.tripEndDate) : 1
   const days = Array.from({ length: totalDays }, (_, i) => i)
 
   const visiblePlaces = selectedDay === null

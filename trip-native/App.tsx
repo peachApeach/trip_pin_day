@@ -50,9 +50,11 @@ export default function App() {
     AsyncStorage.getItem('trips').then((json) => {
       if (json) {
         const parsed: Trip[] = JSON.parse(json)
-        const VALID = new Set(['DRIVING', 'TRANSIT', 'WALKING', 'BICYCLING'])
+        const VALID = new Set(['DRIVING', 'TRANSIT', 'WALKING', 'BICYCLING', 'OTHER'])
         const fixed = parsed.map(t => ({
           ...t,
+          tripStartDate: t.tripStartDate ?? null,
+          tripEndDate: t.tripEndDate ?? null,
           segmentModes: Object.fromEntries(
             Object.entries(t.segmentModes ?? {}).map(([k, v]) => [
               k,
