@@ -97,6 +97,61 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [previewMarker, setPreviewMarker] = useState<SearchResult | null>(null)
+  const [suggestions, setSuggestions] = useState<{ placeId: string; description: string }[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const autocompleteRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const fetchSuggestions = async (text: string) => {
+    if (text.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const res = await fetch(url)
+      const data = await res.json()
+      if (data.status === 'OK') {
+        setSuggestions(data.predictions.slice(0, 5).map((p: any) => ({
+          placeId: p.place_id,
+          description: p.description,
+        })))
+        setShowSuggestions(true)
+      }
+    } catch {}
+  }
+
+  const fetchPlaceDetail = async (placeId: string): Promise<SearchResult | null> => {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,geometry,formatted_address&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const res = await fetch(url)
+      const data = await res.json()
+      const r = data?.result
+      if (!r) return null
+      return {
+        name: r.name ?? '',
+        address: r.formatted_address ?? '',
+        lat: r.geometry.location.lat,
+        lng: r.geometry.location.lng,
+      }
+    } catch { return null }
+  }
+
+  const handleSuggestionSelect = async (item: { placeId: string; description: string }) => {
+    setShowSuggestions(false)
+    setQuery(item.description)
+    Keyboard.dismiss()
+    const detail = await fetchPlaceDetail(item.placeId)
+    if (!detail) return
+    setPreviewMarker(detail)
+    mapRef.current?.animateToRegion(
+      { latitude: detail.lat, longitude: detail.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+      600
+    )
+  }
+
+  const handleQueryChange = (text: string) => {
+    setQuery(text)
+    setErrorMsg('')
+    if (autocompleteRef.current) clearTimeout(autocompleteRef.current)
+    autocompleteRef.current = setTimeout(() => fetchSuggestions(text), 300)
+  }
 
   const parseResults = (items: any[]): SearchResult[] =>
     items.map((r: any) => ({
@@ -291,14 +346,14 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
             placeholder="장소 검색"
             placeholderTextColor="#bbb"
             value={query}
-            onChangeText={(text) => { setQuery(text); setErrorMsg('') }}
+            onChangeText={handleQueryChange}
             returnKeyType="search"
-            onSubmitEditing={handleSearch}
+            onSubmitEditing={() => { setShowSuggestions(false); handleSearch() }}
           />
           {searching
             ? <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 4 }} />
             : !!query && (
-              <TouchableOpacity onPress={() => { setQuery(''); setErrorMsg('') }} style={styles.clearBtn}>
+              <TouchableOpacity onPress={() => { setQuery(''); setErrorMsg(''); setSuggestions([]); setShowSuggestions(false) }} style={styles.clearBtn}>
                 <Text style={styles.clearText}>✕</Text>
               </TouchableOpacity>
             )
@@ -308,6 +363,21 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
           </TouchableOpacity>
         </View>
         {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+        {showSuggestions && suggestions.length > 0 && (
+          <View style={styles.suggestionsBox}>
+            {suggestions.map((item, idx) => (
+              <TouchableOpacity
+                key={item.placeId}
+                style={[styles.suggestionItem, idx === suggestions.length - 1 && { borderBottomWidth: 0 }]}
+                onPress={() => handleSuggestionSelect(item)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.suggestionIcon}>📍</Text>
+                <Text style={styles.suggestionText} numberOfLines={1}>{item.description}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* 경로 상태 배너 */}
@@ -463,6 +533,19 @@ const styles = StyleSheet.create({
   },
   searchBtnText: { color: 'white', fontSize: 12, fontWeight: '700' },
   errorText: { marginTop: 6, marginLeft: 4, fontSize: 12, color: COLORS.primary, fontWeight: '500' },
+  suggestionsBox: {
+    marginTop: 6, backgroundColor: 'white', borderRadius: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1, shadowRadius: 8, elevation: 5,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
+  },
+  suggestionIcon: { fontSize: 13 },
+  suggestionText: { flex: 1, fontSize: 13, color: COLORS.text, fontWeight: '500' },
 
   resultsPanel: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
