@@ -164,6 +164,8 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   const handleSearch = async () => {
     if (!query.trim()) return
     Keyboard.dismiss()
+    setShowSuggestions(false)
+    setSuggestions([])
     setSearching(true)
     setErrorMsg('')
     setResults([])
@@ -222,12 +224,14 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
 
   const handlePoiClick = (e: PoiClickEvent) => {
     if (showModal) return
+    setShowSuggestions(false)
     const { coordinate, name } = e.nativeEvent
     setPreviewMarker({ lat: coordinate.latitude, lng: coordinate.longitude, name, address: '' })
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
     if (showModal) return
+    setShowSuggestions(false)
     if (markerPressedRef.current) { markerPressedRef.current = false; return }
     onMarkerPress(0)  // 선택 해제
     const { latitude, longitude } = e.nativeEvent.coordinate
