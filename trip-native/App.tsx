@@ -12,7 +12,7 @@ import TripOverviewScreen from './components/TripOverviewScreen'
 import { fetchTravelSegments, fetchSegment } from './utils/distanceMatrix'
 import { fetchRoute, fetchAllRoutes } from './utils/directions'
 import { COLORS } from './constants'
-import type { Trip, TravelMode, TravelSegment, TabKey } from './types'
+import type { Trip, Place, TravelMode, TravelSegment, TabKey } from './types'
 
 export default function App() {
   const [trips, setTrips] = useState<Trip[]>([])
@@ -151,6 +151,13 @@ export default function App() {
 
   const handleUpdateDayIndex = useCallback((id: number, dayIndex: number) => {
     updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, dayIndex } : p) }))
+  }, [updateTrip])
+
+  const handleReorderPlaces = useCallback((dayIndex: number, reordered: Place[]) => {
+    updateTrip((t) => {
+      const others = t.places.filter(p => (p.dayIndex ?? 0) !== dayIndex)
+      return { ...t, places: [...others, ...reordered] }
+    })
   }, [updateTrip])
 
   const handleStartDateChange = useCallback((date: Date) => {
@@ -377,6 +384,7 @@ export default function App() {
               onRemove={handleRemove}
               onUpdateDuration={handleUpdateDuration}
               onUpdateDayIndex={handleUpdateDayIndex}
+              onReorder={(reordered) => handleReorderPlaces(activeDayIndex, reordered)}
               onSegmentModeChange={handleSegmentModeChange}
               onSegmentDurationChange={handleSegmentDurationChange}
               onSegmentPress={handleSegmentPress}
@@ -388,12 +396,8 @@ export default function App() {
               startDate={startDate}
               onStartDateChange={handleStartDateChange}
               travelMode={travelMode}
-              onTravelModeChange={handleTravelModeChange}
               travelSegments={travelSegments}
               segmentsLoading={segmentsLoading}
-              tripStartDate={activeTrip.tripStartDate}
-              tripEndDate={activeTrip.tripEndDate}
-              onTripDatesChange={handleTripDatesChange}
             />
           )}
         </View>

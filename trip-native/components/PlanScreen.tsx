@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, Platform, Linking,
+  StyleSheet, ActivityIndicator, Platform, Linking, PanResponder,
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
 import { COLORS, PLACE_COLORS } from '../constants'
@@ -14,6 +14,7 @@ interface Props {
   onRemove: (id: number) => void
   onUpdateDuration: (id: number, duration: number) => void
   onUpdateDayIndex: (id: number, dayIndex: number) => void
+  onReorder: (reordered: Place[]) => void
   onSegmentModeChange: (segIdx: number, mode: TravelMode) => void
   onSegmentDurationChange: (segIdx: number, duration: number | null) => void
   onSegmentPress: (from: Place, to: Place, mode: TravelMode) => void
@@ -23,14 +24,10 @@ interface Props {
   startDate: Date
   onStartDateChange: (date: Date) => void
   travelMode: TravelMode
-  onTravelModeChange: (mode: TravelMode) => void
   travelSegments: (TravelSegment | null)[]
   segmentsLoading: boolean
   segmentModes: TravelMode[]
   segmentDurations: (number | null)[]
-  tripStartDate: string | null
-  tripEndDate: string | null
-  onTripDatesChange: (start: string | null, end: string | null) => void
 }
 
 const DURATION_OPTIONS = [
@@ -58,21 +55,13 @@ function addMinutes(date: Date, minutes: number) {
 function formatTime(date: Date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
-function formatDate(iso: string | null) {
-  if (!iso) return '미정'
-  const d = new Date(iso)
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
-}
-function calcNights(start: string | null, end: string | null) {
-  if (!start || !end) return ''
-  const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
-  return diff > 0 ? `${diff}박 ${diff + 1}일` : ''
-}
 function formatDuration(minutes: number) {
   if (minutes < 60) return `${minutes}분`
   const h = Math.floor(minutes / 60), m = minutes % 60
   return m > 0 ? `${h}시간 ${m}분` : `${h}시간`
 }
+
+
 
 // 제휴 링크 — 실제 파트너스 가입 후 af_id/utm 파라미터 교체
 function getKlookUrl(placeName: string) {
@@ -84,23 +73,24 @@ function getMrtUrl(placeName: string) {
   return `https://www.myrealtrip.com/offers?q=${q}&utm_source=gurmi&utm_medium=app`
 }
 
-type PickerMode = 'time' | 'tripStart' | 'tripEnd' | null
-
-function calcTotalDays(start: string | null, end: string | null): number {
-  if (!start || !end) return 1
-  const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
-  return Math.max(1, diff + 1)
-}
-
 export default function PlanScreen({
   places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onUpdateDayIndex,
-  onSegmentModeChange, onSegmentDurationChange, onSegmentPress, prevDayLastPlace, onShowMap, onFocusPlace,
-  startDate, onStartDateChange, travelMode, onTravelModeChange,
+  onReorder, onSegmentModeChange, onSegmentDurationChange, onSegmentPress,
+  prevDayLastPlace, onShowMap, onFocusPlace,
+  startDate, onStartDateChange, travelMode,
   travelSegments, segmentsLoading, segmentModes, segmentDurations,
-  tripStartDate, tripEndDate, onTripDatesChange,
 }: Props) {
-  const [pickerMode, setPickerMode] = useState<PickerMode>(null)
+  const [pickerMode, setPickerMode] = useState<boolean>(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [dragOrder, setDragOrder] = useState<number[] | null>(null)
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
+  const [dragOffsetY, setDragOffsetY] = useState(0)
+
+  const dragOrderRef = useRef<number[] | null>(null)
+  dragOrderRef.current = dragOrder
+  const startPageY = useRef(0)
+  const startItemTop = useRef(0)
+  const ITEM_HEIGHT = 72 // 드래그 모드에서 각 카드 높이
 
   // 타임라인 계산 (prevDayLastPlace 있으면 travelSegments[0]이 전날→오늘 구간)
   const segOffset = prevDayLastPlace ? 1 : 0
@@ -122,25 +112,10 @@ export default function PlanScreen({
   const endTime = new Date(currentTime)
 
   const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
-    if (Platform.OS === 'android') setPickerMode(null)
-    if (!date) return
-    if (pickerMode === 'time') {
-      onStartDateChange(date)
-    } else if (pickerMode === 'tripStart') {
-      const newEnd = tripEndDate && date > new Date(tripEndDate) ? null : tripEndDate
-      onTripDatesChange(date.toISOString(), newEnd)
-    } else if (pickerMode === 'tripEnd') {
-      onTripDatesChange(tripStartDate, date.toISOString())
-    }
+    if (Platform.OS === 'android') setPickerMode(false)
+    if (date) onStartDateChange(date)
   }
 
-  const pickerValue = () => {
-    if (pickerMode === 'time') return startDate
-    if (pickerMode === 'tripStart') return tripStartDate ? new Date(tripStartDate) : new Date()
-    return tripEndDate ? new Date(tripEndDate) : (tripStartDate ? new Date(tripStartDate) : new Date())
-  }
-
-  const nights = calcNights(tripStartDate, tripEndDate)
   const travelIcon = TRAVEL_MODES.find(m => m.key === travelMode)?.icon ?? '🚗'
 
   if (places.length === 0) {
@@ -156,95 +131,117 @@ export default function PlanScreen({
     )
   }
 
+  function makeDragPan(placeIdx: number) {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        const order = places.map((_, i) => i)
+        setDragOrder(order)
+        const pos = placeIdx
+        startPageY.current = e.nativeEvent.pageY
+        startItemTop.current = pos * ITEM_HEIGHT
+        setDraggingIdx(placeIdx)
+        setDragOffsetY(0)
+      },
+      onPanResponderMove: (e) => {
+        const dy = e.nativeEvent.pageY - startPageY.current
+        setDragOffsetY(dy)
+        const curOrder = dragOrderRef.current ?? places.map((_, i) => i)
+        const y = Math.max(0, Math.min(startItemTop.current + dy, (places.length - 1) * ITEM_HEIGHT))
+        const newPos = Math.min(Math.round(y / ITEM_HEIGHT), places.length - 1)
+        const oldPos = curOrder.indexOf(placeIdx)
+        if (newPos !== oldPos) {
+          const next = [...curOrder]
+          next.splice(oldPos, 1)
+          next.splice(newPos, 0, placeIdx)
+          setDragOrder(next)
+        }
+      },
+      onPanResponderRelease: () => {
+        const finalOrder = dragOrderRef.current ?? places.map((_, i) => i)
+        onReorder(finalOrder.map(i => places[i]))
+        setDraggingIdx(null)
+        setDragOrder(null)
+        setDragOffsetY(0)
+      },
+    })
+  }
+
+  const dragPansRef = useRef<ReturnType<typeof PanResponder.create>[]>([])
+  if (dragPansRef.current.length !== places.length) {
+    dragPansRef.current = places.map((_, i) => makeDragPan(i))
+  }
+
+  const isDragging = draggingIdx !== null
+
   return (
     <View style={styles.container}>
-      {/* 헤더 설정 영역 */}
+      {/* 헤더 — 출발시간 + 로딩 */}
       <View style={styles.header}>
-        {/* 여행 날짜 */}
-        <View style={styles.headerSection}>
-          <Text style={styles.sectionLabel}>여행 날짜</Text>
-          <View style={styles.dateRow}>
-            <TouchableOpacity
-              style={[styles.dateBtn, tripStartDate && styles.dateBtnFilled]}
-              onPress={() => setPickerMode('tripStart')}
-            >
-              <Text style={styles.dateBtnLabel}>출발</Text>
-              <Text style={[styles.dateBtnValue, tripStartDate && styles.dateBtnValueFilled]}>
-                {formatDate(tripStartDate)}
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.dateSep}>→</Text>
-            <TouchableOpacity
-              style={[styles.dateBtn, tripEndDate && styles.dateBtnFilled]}
-              onPress={() => setPickerMode('tripEnd')}
-            >
-              <Text style={styles.dateBtnLabel}>귀국</Text>
-              <Text style={[styles.dateBtnValue, tripEndDate && styles.dateBtnValueFilled]}>
-                {formatDate(tripEndDate)}
-              </Text>
-            </TouchableOpacity>
-            {!!nights && (
-              <View style={styles.nightsBadge}>
-                <Text style={styles.nightsText}>{nights}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* 출발시간 + 이동수단 */}
         <View style={styles.headerRow}>
-          <View style={styles.headerSection}>
-            <Text style={styles.sectionLabel}>출발 시간</Text>
-            <TouchableOpacity style={styles.timePicker} onPress={() => setPickerMode('time')}>
-              <Text style={styles.timePickerText}>{formatTime(startDate)}</Text>
-              <Text style={styles.timePickerIcon}>✏️</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modeScroll}>
-            <View style={styles.modeRow}>
-              {TRAVEL_MODES.map(mode => (
-                <TouchableOpacity
-                  key={mode.key}
-                  style={[styles.modeBtn, travelMode === mode.key && styles.modeBtnActive]}
-                  onPress={() => onTravelModeChange(mode.key)}
-                >
-                  <Text style={styles.modeIcon}>{mode.icon}</Text>
-                  <Text style={[styles.modeLabel, travelMode === mode.key && styles.modeLabelActive]}>
-                    {mode.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          <Text style={styles.sectionLabel}>출발 시간</Text>
+          <TouchableOpacity style={styles.timePicker} onPress={() => setPickerMode(true)}>
+            <Text style={styles.timePickerText}>{formatTime(startDate)}</Text>
+            <Text style={styles.timePickerIcon}>✏️</Text>
+          </TouchableOpacity>
+          {segmentsLoading && (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.loadingText}>계산 중...</Text>
             </View>
-          </ScrollView>
+          )}
         </View>
-
-        {segmentsLoading && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={styles.loadingText}>이동 시간 계산 중...</Text>
-          </View>
-        )}
-
-        {/* DateTimePicker */}
-        {pickerMode !== null && (
+        {pickerMode && (
           <DateTimePicker
-            value={pickerValue()}
-            mode={pickerMode === 'time' ? 'time' : 'date'}
+            value={startDate}
+            mode="time"
             is24Hour
-            minimumDate={pickerMode === 'tripEnd' && tripStartDate ? new Date(tripStartDate) : undefined}
-            display={Platform.OS === 'ios' ? (pickerMode === 'time' ? 'spinner' : 'inline') : 'default'}
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={handlePickerChange}
           />
         )}
-        {Platform.OS === 'ios' && pickerMode !== null && (
-          <TouchableOpacity style={styles.pickerDone} onPress={() => setPickerMode(null)}>
+        {Platform.OS === 'ios' && pickerMode && (
+          <TouchableOpacity style={styles.pickerDone} onPress={() => setPickerMode(false)}>
             <Text style={styles.pickerDoneText}>확인</Text>
           </TouchableOpacity>
         )}
       </View>
 
+      {/* 드래그 순서 변경 모드 */}
+      {isDragging && (
+        <View style={[styles.dragList, { height: places.length * ITEM_HEIGHT }]}>
+          {(dragOrder ?? places.map((_, i) => i)).map((placeIdx, pos) => {
+            const place = places[placeIdx]
+            const color = PLACE_COLORS[placeIdx % PLACE_COLORS.length]
+            const isThisDragging = draggingIdx === placeIdx
+            const top = isThisDragging
+              ? Math.max(0, Math.min(startItemTop.current + dragOffsetY, (places.length - 1) * ITEM_HEIGHT))
+              : pos * ITEM_HEIGHT
+            return (
+              <View
+                key={place.id}
+                style={[
+                  styles.dragItem,
+                  { top },
+                  isThisDragging && styles.dragItemActive,
+                ]}
+              >
+                <View style={[styles.dragBadge, { backgroundColor: color.bg }]}>
+                  <Text style={[styles.dragBadgeText, { color: color.dot }]}>{pos + 1}</Text>
+                </View>
+                <Text style={styles.dragName} numberOfLines={1}>{place.name}</Text>
+                <View style={styles.dragHandle} {...dragPansRef.current[placeIdx].panHandlers}>
+                  <Text style={styles.dragHandleIcon}>☰</Text>
+                </View>
+              </View>
+            )
+          })}
+        </View>
+      )}
+
       {/* 타임라인 + 장소 카드 */}
-      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false} scrollEnabled={!isDragging}>
         {/* 전날 마지막 장소 + 이동 구간 */}
         {prevDayLastPlace && (
           <>
@@ -339,6 +336,9 @@ export default function PlanScreen({
                   activeOpacity={0.85}
                 >
                   <View style={styles.placeCardTop}>
+                    <View {...dragPansRef.current[index].panHandlers} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                      <Text style={styles.handleIcon}>☰</Text>
+                    </View>
                     <View style={[styles.indexBadge, { backgroundColor: color.bg }]}>
                       <Text style={[styles.indexText, { color: color.dot }]}>{index + 1}</Text>
                     </View>
@@ -488,7 +488,7 @@ export default function PlanScreen({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: { flex: 1, backgroundColor: COLORS.bg, position: 'relative' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 8 },
   emptyEmoji: { fontSize: 48, marginBottom: 4 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
@@ -534,6 +534,30 @@ const styles = StyleSheet.create({
   modeLabelActive: { color: COLORS.primary },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   loadingText: { fontSize: 12, color: COLORS.textSub },
+  handleIcon: { fontSize: 16, color: '#C0C0C0', paddingHorizontal: 4 },
+
+  dragList: {
+    position: 'absolute', top: 70, left: 0, right: 0,
+    zIndex: 100, backgroundColor: COLORS.bg, paddingHorizontal: 16,
+  },
+  dragItem: {
+    position: 'absolute', left: 16, right: 16,
+    height: 64,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: 'white', borderRadius: 14, paddingHorizontal: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  dragItemActive: {
+    shadowOpacity: 0.2, elevation: 12,
+    transform: [{ scale: 1.03 }],
+    zIndex: 999,
+  },
+  dragBadge: { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
+  dragBadgeText: { fontSize: 12, fontWeight: '800' },
+  dragName: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text },
+  dragHandle: { padding: 10 },
+  dragHandleIcon: { fontSize: 18, color: '#BDBDBD' },
   pickerDone: { alignSelf: 'flex-end', backgroundColor: COLORS.mint, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 10 },
   pickerDoneText: { color: 'white', fontSize: 13, fontWeight: '700' },
 
