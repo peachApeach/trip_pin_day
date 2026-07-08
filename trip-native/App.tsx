@@ -225,13 +225,13 @@ export default function App() {
     }
   }, [])
 
-  const handleAddTrip = (title: string, tripStartDate: string | null, tripEndDate: string | null) => {
+  const handleAddTrip = (title: string, tripStartDate: string | null, tripEndDate: string | null, budgets: import('./types').BudgetItem[]) => {
     const d = new Date(); d.setHours(9, 0, 0, 0)
     const newTrip: Trip = {
       id: Date.now(), title, places: [],
       startDate: d.toISOString(), travelMode: 'DRIVING',
       segmentModes: {}, segmentDurations: {},
-      tripStartDate, tripEndDate,
+      tripStartDate, tripEndDate, budgets,
     }
     setTrips((prev) => [...prev, newTrip])
     setActiveTrip(newTrip)
@@ -247,7 +247,7 @@ export default function App() {
     setTrips((prev) => prev.filter((t) => t.id !== id))
   }
 
-  const handleEditTrip = (id: number, title: string, tripStartDate: string | null, tripEndDate: string | null) => {
+  const handleEditTrip = (id: number, title: string, tripStartDate: string | null, tripEndDate: string | null, budgets: import('./types').BudgetItem[]) => {
     const trip = trips.find(t => t.id === id)
     if (!trip) return
 
@@ -269,7 +269,7 @@ export default function App() {
               style: 'destructive',
               onPress: () => {
                 setTrips(prev => prev.map(t => t.id === id ? {
-                  ...t, title, tripStartDate, tripEndDate,
+                  ...t, title, tripStartDate, tripEndDate, budgets,
                   places: t.places.filter(p => (p.dayIndex ?? 0) < newDays),
                   segmentModes: Object.fromEntries(
                     Object.entries(t.segmentModes ?? {}).filter(([k]) => Number(k) < newDays)
@@ -286,7 +286,7 @@ export default function App() {
       }
     }
 
-    setTrips(prev => prev.map(t => t.id === id ? { ...t, title, tripStartDate, tripEndDate } : t))
+    setTrips(prev => prev.map(t => t.id === id ? { ...t, title, tripStartDate, tripEndDate, budgets } : t))
   }
 
   const handleSelectTrip = (trip: Trip) => {

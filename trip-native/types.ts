@@ -1,3 +1,8 @@
+export interface BudgetItem {
+  currency: string
+  amount: number
+}
+
 export interface Trip {
   id: number
   title: string
@@ -8,6 +13,7 @@ export interface Trip {
   segmentDurations: { [dayIndex: number]: (number | null)[] }
   tripStartDate: string | null
   tripEndDate: string | null
+  budgets?: BudgetItem[]
 }
 
 export interface Place {
