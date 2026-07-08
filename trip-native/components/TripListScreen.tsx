@@ -11,6 +11,7 @@ interface Props {
   trips: Trip[]
   onSelect: (trip: Trip) => void
   onAdd: (title: string, tripStartDate: string | null, tripEndDate: string | null) => void
+  onEdit: (id: number, title: string, tripStartDate: string | null, tripEndDate: string | null) => void
   onDelete: (id: number) => void
 }
 
@@ -26,35 +27,47 @@ function formatDate(iso: string | null): string {
 function calcNights(start: string | null, end: string | null): string {
   if (!start || !end) return ''
   const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
-  if (diff <= 0) return ''
+  if (diff === 0) return '당일치기'
+  if (diff < 0) return ''
   return `${diff}박 ${diff + 1}일`
 }
 
 type PickerTarget = 'start' | 'end' | null
 
-export default function TripListScreen({ trips, onSelect, onAdd, onDelete }: Props) {
+export default function TripListScreen({ trips, onSelect, onAdd, onEdit, onDelete }: Props) {
   const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [title, setTitle] = useState('')
   const [tripStart, setTripStart] = useState<Date | null>(null)
   const [tripEnd, setTripEnd] = useState<Date | null>(null)
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null)
 
+  const openEdit = (trip: Trip) => {
+    setEditingId(trip.id)
+    setTitle(trip.title)
+    setTripStart(trip.tripStartDate ? new Date(trip.tripStartDate) : null)
+    setTripEnd(trip.tripEndDate ? new Date(trip.tripEndDate) : null)
+    setAdding(false)
+  }
+
   const handleAdd = () => {
     const trimmed = title.trim()
     if (!trimmed || !tripStart || !tripEnd) return
-    onAdd(
-      trimmed,
-      tripStart.toISOString(),
-      tripEnd.toISOString(),
-    )
+    if (editingId !== null) {
+      onEdit(editingId, trimmed, tripStart.toISOString(), tripEnd.toISOString())
+    } else {
+      onAdd(trimmed, tripStart.toISOString(), tripEnd.toISOString())
+    }
     setTitle('')
     setTripStart(null)
     setTripEnd(null)
     setAdding(false)
+    setEditingId(null)
   }
 
   const handleCancel = () => {
     setAdding(false)
+    setEditingId(null)
     setTitle('')
     setTripStart(null)
     setTripEnd(null)
@@ -89,9 +102,9 @@ export default function TripListScreen({ trips, onSelect, onAdd, onDelete }: Pro
         </TouchableOpacity>
       </View>
 
-      {adding && (
+      {(adding || editingId !== null) && (
         <View style={styles.addCard}>
-          <Text style={styles.addCardLabel}>새 여행 이름</Text>
+          <Text style={styles.addCardLabel}>{editingId !== null ? '여행 이름' : '새 여행 이름'}</Text>
           <TextInput
             style={styles.addCardInput}
             placeholder="예: 제주도 여행"
@@ -157,7 +170,7 @@ export default function TripListScreen({ trips, onSelect, onAdd, onDelete }: Pro
               onPress={handleAdd}
               disabled={!title.trim() || !tripStart || !tripEnd}
             >
-              <Text style={styles.addCardConfirmText}>만들기</Text>
+              <Text style={styles.addCardConfirmText}>{editingId !== null ? '저장' : '만들기'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -197,6 +210,13 @@ export default function TripListScreen({ trips, onSelect, onAdd, onDelete }: Pro
                         {`${formatDate(item.tripStartDate)} ~ ${formatDate(item.tripEndDate)}${nights ? `  ${nights}` : ''}`}
                       </Text>
                     </View>
+                    <TouchableOpacity
+                      style={styles.cardEdit}
+                      onPress={() => openEdit(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={styles.cardEditText}>✏️</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.cardDelete}
                       onPress={() => onDelete(item.id)}
@@ -288,6 +308,8 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
   cardMeta: { fontSize: 12, color: COLORS.textSub, marginTop: 2 },
   cardMetaBottom: { fontSize: 11, fontWeight: '600', marginLeft: 56 },
+  cardEdit: { padding: 4 },
+  cardEditText: { fontSize: 16 },
   cardDelete: { padding: 4 },
   cardDeleteText: { fontSize: 18 },
 

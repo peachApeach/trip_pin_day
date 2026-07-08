@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   View, Text, TouchableOpacity,
-  StyleSheet, StatusBar, Platform, BackHandler,
+  StyleSheet, StatusBar, Platform, BackHandler, Alert, PanResponder,
 } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import MapScreen from './components/MapScreen'
@@ -243,6 +243,48 @@ export default function App() {
     setTrips((prev) => prev.filter((t) => t.id !== id))
   }
 
+  const handleEditTrip = (id: number, title: string, tripStartDate: string | null, tripEndDate: string | null) => {
+    const trip = trips.find(t => t.id === id)
+    if (!trip) return
+
+    if (tripStartDate && tripEndDate) {
+      const newDays = Math.max(1, Math.round((new Date(tripEndDate).getTime() - new Date(tripStartDate).getTime()) / 86400000) + 1)
+
+      // prevDayLastPlace(dayIndex = 이전날)는 자신의 dayIndex로 저장되므로 자연히 제외됨.
+      // 실제로 dayIndex >= newDays 인 장소만 카운트.
+      const exceedingPlaces = trip.places.filter(p => (p.dayIndex ?? 0) >= newDays)
+
+      if (exceedingPlaces.length > 0) {
+        Alert.alert(
+          '일정 초기화',
+          `변경된 날짜 범위(${newDays}일)를 벗어나는 장소 ${exceedingPlaces.length}곳이 있어요.\n해당 장소를 삭제하고 날짜를 변경할까요?`,
+          [
+            { text: '취소', style: 'cancel' },
+            {
+              text: '삭제하고 변경',
+              style: 'destructive',
+              onPress: () => {
+                setTrips(prev => prev.map(t => t.id === id ? {
+                  ...t, title, tripStartDate, tripEndDate,
+                  places: t.places.filter(p => (p.dayIndex ?? 0) < newDays),
+                  segmentModes: Object.fromEntries(
+                    Object.entries(t.segmentModes ?? {}).filter(([k]) => Number(k) < newDays)
+                  ),
+                  segmentDurations: Object.fromEntries(
+                    Object.entries(t.segmentDurations ?? {}).filter(([k]) => Number(k) < newDays)
+                  ),
+                } : t))
+              },
+            },
+          ]
+        )
+        return
+      }
+    }
+
+    setTrips(prev => prev.map(t => t.id === id ? { ...t, title, tripStartDate, tripEndDate } : t))
+  }
+
   const handleSelectTrip = (trip: Trip) => {
     setActiveTrip(null)
     setOverviewTrip(trip)
@@ -273,6 +315,7 @@ export default function App() {
             trips={trips}
             onSelect={handleSelectTrip}
             onAdd={handleAddTrip}
+            onEdit={handleEditTrip}
             onDelete={handleDeleteTrip}
           />
         </SafeAreaView>
@@ -377,28 +420,34 @@ export default function App() {
           </View>
 
           {activeTab === 'plan' && (
-            <PlanScreen
-              places={places}
-              selectedPlaceId={selectedPlaceId}
-              onSelect={setSelectedPlaceId}
-              onRemove={handleRemove}
-              onUpdateDuration={handleUpdateDuration}
-              onUpdateDayIndex={handleUpdateDayIndex}
-              onReorder={(reordered) => handleReorderPlaces(activeDayIndex, reordered)}
-              onSegmentModeChange={handleSegmentModeChange}
-              onSegmentDurationChange={handleSegmentDurationChange}
-              onSegmentPress={handleSegmentPress}
-              segmentModes={(activeTrip.segmentModes ?? {})[activeDayIndex] ?? []}
-              segmentDurations={(activeTrip.segmentDurations ?? {})[activeDayIndex] ?? []}
-              prevDayLastPlace={prevDayLastPlace}
-              onShowMap={() => setActiveTab('map')}
-              onFocusPlace={(id) => { setFocusPlaceId(id); setActiveTab('map') }}
-              startDate={startDate}
-              onStartDateChange={handleStartDateChange}
-              travelMode={travelMode}
-              travelSegments={travelSegments}
-              segmentsLoading={segmentsLoading}
-            />
+            <SwipeDayWrapper
+              activeDayIndex={activeDayIndex}
+              totalDays={totalDays}
+              onDayChange={(idx) => { setActiveDayIndex(idx); setSelectedPlaceId(null) }}
+            >
+              <PlanScreen
+                places={places}
+                selectedPlaceId={selectedPlaceId}
+                onSelect={setSelectedPlaceId}
+                onRemove={handleRemove}
+                onUpdateDuration={handleUpdateDuration}
+                onUpdateDayIndex={handleUpdateDayIndex}
+                onReorder={(reordered) => handleReorderPlaces(activeDayIndex, reordered)}
+                onSegmentModeChange={handleSegmentModeChange}
+                onSegmentDurationChange={handleSegmentDurationChange}
+                onSegmentPress={handleSegmentPress}
+                segmentModes={(activeTrip.segmentModes ?? {})[activeDayIndex] ?? []}
+                segmentDurations={(activeTrip.segmentDurations ?? {})[activeDayIndex] ?? []}
+                prevDayLastPlace={prevDayLastPlace}
+                onShowMap={() => setActiveTab('map')}
+                onFocusPlace={(id) => { setFocusPlaceId(id); setActiveTab('map') }}
+                startDate={startDate}
+                onStartDateChange={handleStartDateChange}
+                travelMode={travelMode}
+                travelSegments={travelSegments}
+                segmentsLoading={segmentsLoading}
+              />
+            </SwipeDayWrapper>
           )}
         </View>
 
@@ -420,6 +469,41 @@ export default function App() {
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
+  )
+}
+
+function SwipeDayWrapper({ activeDayIndex, totalDays, onDayChange, children }: {
+  activeDayIndex: number
+  totalDays: number
+  onDayChange: (idx: number) => void
+  children: React.ReactNode
+}) {
+  const dayRef = useRef(activeDayIndex)
+  dayRef.current = activeDayIndex
+  const totalRef = useRef(totalDays)
+  totalRef.current = totalDays
+
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) => {
+      const absX = Math.abs(gs.dx)
+      const absY = Math.abs(gs.dy)
+      return absX > 10 && absX > absY * 1.5
+    },
+    onPanResponderRelease: (_, gs) => {
+      if (Math.abs(gs.dx) < 50) return
+      if (gs.dx < 0 && dayRef.current < totalRef.current - 1) {
+        onDayChange(dayRef.current + 1)
+      } else if (gs.dx > 0 && dayRef.current > 0) {
+        onDayChange(dayRef.current - 1)
+      }
+    },
+  })).current
+
+  return (
+    <View style={{ flex: 1 }} {...pan.panHandlers}>
+      {children}
+    </View>
   )
 }
 

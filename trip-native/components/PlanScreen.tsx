@@ -118,18 +118,8 @@ export default function PlanScreen({
 
   const travelIcon = TRAVEL_MODES.find(m => m.key === travelMode)?.icon ?? '🚗'
 
-  if (places.length === 0) {
-    return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyEmoji}>🗺️</Text>
-        <Text style={styles.emptyTitle}>아직 장소가 없어요</Text>
-        <Text style={styles.emptyDesc}>지도를 탭해서 가고 싶은 곳을 추가해보세요</Text>
-        <TouchableOpacity style={styles.emptyBtn} onPress={onShowMap}>
-          <Text style={styles.emptyBtnText}>지도 보러 가기</Text>
-        </TouchableOpacity>
-      </View>
-    )
-  }
+  // dragPansRef는 early return 전에 선언해야 hooks 규칙 위반 안 됨
+  const dragPansRef = useRef<ReturnType<typeof PanResponder.create>[]>([])
 
   function makeDragPan(placeIdx: number) {
     return PanResponder.create({
@@ -168,9 +158,21 @@ export default function PlanScreen({
     })
   }
 
-  const dragPansRef = useRef<ReturnType<typeof PanResponder.create>[]>([])
   if (dragPansRef.current.length !== places.length) {
     dragPansRef.current = places.map((_, i) => makeDragPan(i))
+  }
+
+  if (places.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyEmoji}>🗺️</Text>
+        <Text style={styles.emptyTitle}>아직 장소가 없어요</Text>
+        <Text style={styles.emptyDesc}>지도를 탭해서 가고 싶은 곳을 추가해보세요</Text>
+        <TouchableOpacity style={styles.emptyBtn} onPress={onShowMap}>
+          <Text style={styles.emptyBtnText}>지도 보러 가기</Text>
+        </TouchableOpacity>
+      </View>
+    )
   }
 
   const isDragging = draggingIdx !== null

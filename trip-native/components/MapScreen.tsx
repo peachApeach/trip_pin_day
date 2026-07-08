@@ -1,12 +1,26 @@
 import { useRef, useState, useEffect } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Keyboard, FlatList,
+  ActivityIndicator, Keyboard, FlatList, ScrollView, Linking,
 } from 'react-native'
 import MapView, { Marker, Polyline, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { GOOGLE_MAPS_API_KEY, COLORS, PLACE_COLORS } from '../constants'
 import type { Place } from '../types'
+
+interface PlaceDetail {
+  placeId: string
+  name: string
+  address: string
+  lat: number
+  lng: number
+  rating?: number
+  userRatingsTotal?: number
+  priceLevel?: number
+  openNow?: boolean
+  todayHours?: string
+  phone?: string
+}
 
 interface Props {
   places: Place[]
@@ -100,11 +114,15 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   const [suggestions, setSuggestions] = useState<{ placeId: string; description: string }[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const autocompleteRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const currentRegionRef = useRef<Region>(INITIAL_REGION)
+  const [placeDetail, setPlaceDetail] = useState<PlaceDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
 
   const fetchSuggestions = async (text: string) => {
     if (text.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const { latitude, longitude } = currentRegionRef.current
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&location=${latitude},${longitude}&radius=20000&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
       if (data.status === 'OK') {
@@ -119,11 +137,31 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
 
   const fetchPlaceDetail = async (placeId: string): Promise<SearchResult | null> => {
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,geometry,formatted_address&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const fields = 'name,geometry,formatted_address,rating,user_ratings_total,price_level,opening_hours,formatted_phone_number'
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
       const r = data?.result
       if (!r) return null
+
+      const todayIdx = new Date().getDay()
+      const weekdayTexts: string[] | undefined = r.opening_hours?.weekday_text
+      const todayHours = weekdayTexts?.[todayIdx === 0 ? 6 : todayIdx - 1]?.replace(/^[^:]+:\s*/, '') ?? undefined
+
+      setPlaceDetail({
+        placeId,
+        name: r.name ?? '',
+        address: r.formatted_address ?? '',
+        lat: r.geometry.location.lat,
+        lng: r.geometry.location.lng,
+        rating: r.rating,
+        userRatingsTotal: r.user_ratings_total,
+        priceLevel: r.price_level,
+        openNow: r.opening_hours?.open_now,
+        todayHours,
+        phone: r.formatted_phone_number,
+      })
+
       return {
         name: r.name ?? '',
         address: r.formatted_address ?? '',
@@ -133,11 +171,36 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     } catch { return null }
   }
 
+  const fetchDetailByLatLng = async (lat: number, lng: number, name: string) => {
+    setDetailLoading(true)
+    setPlaceDetail(null)
+    try {
+      // Nearby Search로 가장 가까운 place_id 찾기
+      const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=${encodeURIComponent(name)}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const nearbyRes = await fetch(nearbyUrl)
+      const nearbyData = await nearbyRes.json()
+      const placeId = nearbyData?.results?.[0]?.place_id
+      if (placeId) {
+        await fetchPlaceDetail(placeId)
+      } else {
+        setPlaceDetail({ placeId: '', name, address: '', lat, lng })
+      }
+    } catch {
+      setPlaceDetail({ placeId: '', name, address: '', lat, lng })
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
   const handleSuggestionSelect = async (item: { placeId: string; description: string }) => {
     setShowSuggestions(false)
     setQuery(item.description)
     Keyboard.dismiss()
+    onMarkerPress(0)
+    setDetailLoading(true)
+    setPlaceDetail(null)
     const detail = await fetchPlaceDetail(item.placeId)
+    setDetailLoading(false)
     if (!detail) return
     setPreviewMarker(detail)
     mapRef.current?.animateToRegion(
@@ -149,6 +212,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   const handleQueryChange = (text: string) => {
     setQuery(text)
     setErrorMsg('')
+    if (!text) { setSuggestions([]); setShowSuggestions(false) }
     if (autocompleteRef.current) clearTimeout(autocompleteRef.current)
     autocompleteRef.current = setTimeout(() => fetchSuggestions(text), 300)
   }
@@ -166,13 +230,15 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     Keyboard.dismiss()
     setShowSuggestions(false)
     setSuggestions([])
+    if (autocompleteRef.current) clearTimeout(autocompleteRef.current)
     setSearching(true)
     setErrorMsg('')
     setResults([])
     setNextPageToken(null)
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query.trim())}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const { latitude, longitude } = currentRegionRef.current
+      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query.trim())}&location=${latitude},${longitude}&radius=20000&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
 
@@ -215,6 +281,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   const handleSelectResult = (result: SearchResult) => {
     setShowModal(false)
     setQuery('')
+    onMarkerPress(0)
     setPreviewMarker(result)
     mapRef.current?.animateToRegion(
       { latitude: result.lat, longitude: result.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
@@ -225,15 +292,23 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   const handlePoiClick = (e: PoiClickEvent) => {
     if (showModal) return
     setShowSuggestions(false)
-    const { coordinate, name } = e.nativeEvent
+    const { coordinate, name, placeId } = e.nativeEvent
     setPreviewMarker({ lat: coordinate.latitude, lng: coordinate.longitude, name, address: '' })
+    setDetailLoading(true)
+    setPlaceDetail(null)
+    if (placeId) {
+      fetchPlaceDetail(placeId).then(() => setDetailLoading(false))
+    } else {
+      fetchDetailByLatLng(coordinate.latitude, coordinate.longitude, name).then(() => setDetailLoading(false))
+    }
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
     if (showModal) return
     setShowSuggestions(false)
     if (markerPressedRef.current) { markerPressedRef.current = false; return }
-    onMarkerPress(0)  // 선택 해제
+    onMarkerPress(0)
+    setPlaceDetail(null)
     const { latitude, longitude } = e.nativeEvent.coordinate
     setPreviewMarker({ lat: latitude, lng: longitude, name: '선택한 장소', address: '' })
     const id = ++geocodeIdRef.current
@@ -246,9 +321,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
       const name: string = result?.address_components?.[0]?.long_name ?? '선택한 장소'
       const address: string = result?.formatted_address ?? ''
       setPreviewMarker({ lat: latitude, lng: longitude, name, address })
-    } catch {
-      // 이미 기본값으로 세팅돼 있으니 그대로 둠
-    }
+    } catch {}
   }
 
   return (
@@ -260,6 +333,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
         onMapReady={handleMapReady}
         onPress={handleMapPress}
         onPoiClick={handlePoiClick}
+        onRegionChangeComplete={(region) => { currentRegionRef.current = region }}
         showsUserLocation
         showsMyLocationButton
       >
@@ -397,61 +471,46 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
         </View>
       )}
 
-      {/* 기존 핀 선택 카드 */}
+      {/* 장소 정보 시트 — 기존 핀 선택 */}
       {selectedPlaceId && !previewMarker && (() => {
         const idx = places.findIndex(p => p.id === selectedPlaceId)
         const place = places[idx]
         if (!place) return null
         const dotColor = PLACE_COLORS[idx % PLACE_COLORS.length].dot
         return (
-          <View style={styles.previewCard}>
-            <View style={[styles.previewCardInner, { borderColor: dotColor }]}>
-              <View style={[styles.previewCardDot, { backgroundColor: dotColor }]} />
-              <View style={styles.previewCardTexts}>
-                <Text style={styles.previewCardName} numberOfLines={1}>{place.name}</Text>
-                {!!place.address && (
-                  <Text style={styles.previewCardAddr} numberOfLines={1}>{place.address}</Text>
-                )}
-              </View>
-              <TouchableOpacity
-                style={[styles.previewCardAddBtn, { backgroundColor: '#FF5252' }]}
-                onPress={() => { onRemove(place.id); onMarkerPress(0) }}
-              >
-                <Text style={styles.previewCardAddText}>🗑 삭제</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => onMarkerPress(0)} style={styles.previewCardClose}>
-                <Text style={styles.previewCardCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <PlaceSheet
+            name={place.name}
+            address={place.address}
+            accentColor={dotColor}
+            detail={null}
+            detailLoading={false}
+            actionLabel="🗑 삭제"
+            actionColor="#FF5252"
+            onAction={() => { onRemove(place.id); onMarkerPress(0) }}
+            onClose={() => onMarkerPress(0)}
+          />
         )
       })()}
 
-      {/* 새 장소 preview 카드 */}
+      {/* 장소 정보 시트 — 새 장소 / POI / 검색 결과 */}
       {previewMarker && (
-        <View style={styles.previewCard}>
-          <View style={styles.previewCardInner}>
-            <View style={styles.previewCardDot} />
-            <View style={styles.previewCardTexts}>
-              <Text style={styles.previewCardName} numberOfLines={1}>{previewMarker.name}</Text>
-              {!!previewMarker.address && (
-                <Text style={styles.previewCardAddr} numberOfLines={1}>{previewMarker.address}</Text>
-              )}
-            </View>
-            <TouchableOpacity
-              style={styles.previewCardAddBtn}
-              onPress={() => {
-                onMapPress({ lat: previewMarker.lat, lng: previewMarker.lng, name: previewMarker.name, address: previewMarker.address })
-                setPreviewMarker(null)
-              }}
-            >
-              <Text style={styles.previewCardAddText}>+ 추가</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setPreviewMarker(null)} style={styles.previewCardClose}>
-              <Text style={styles.previewCardCloseText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <PlaceSheet
+          name={previewMarker.name}
+          address={previewMarker.address}
+          accentColor={COLORS.mint}
+          detail={placeDetail}
+          detailLoading={detailLoading}
+          actionLabel="+ 일정 추가"
+          actionColor={COLORS.mint}
+          onAction={() => {
+            const name = placeDetail?.name || previewMarker.name
+            const address = placeDetail?.address || previewMarker.address
+            onMapPress({ lat: previewMarker.lat, lng: previewMarker.lng, name, address })
+            setPreviewMarker(null)
+            setPlaceDetail(null)
+          }}
+          onClose={() => { setPreviewMarker(null); setPlaceDetail(null) }}
+        />
       )}
 
       {/* 검색 결과 패널 */}
@@ -511,6 +570,123 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     </View>
   )
 }
+
+function PlaceSheet({
+  name, address, accentColor, detail, detailLoading,
+  actionLabel, actionColor, onAction, onClose,
+}: {
+  name: string
+  address: string
+  accentColor: string
+  detail: PlaceDetail | null
+  detailLoading: boolean
+  actionLabel: string
+  actionColor: string
+  onAction: () => void
+  onClose: () => void
+}) {
+  const stars = detail?.rating ? '★'.repeat(Math.round(detail.rating)) + '☆'.repeat(5 - Math.round(detail.rating)) : null
+  const price = detail?.priceLevel != null ? '₩'.repeat(detail.priceLevel + 1) : null
+
+  return (
+    <View style={sheet.container}>
+      <View style={sheet.handle} />
+      <View style={sheet.header}>
+        <View style={[sheet.dot, { backgroundColor: accentColor }]} />
+        <View style={sheet.headerTexts}>
+          <Text style={sheet.name} numberOfLines={1}>{name}</Text>
+          {!!address && <Text style={sheet.address} numberOfLines={1}>{address}</Text>}
+        </View>
+        <TouchableOpacity onPress={onClose} style={sheet.closeBtn}>
+          <Text style={sheet.closeText}>✕</Text>
+        </TouchableOpacity>
+      </View>
+
+      {detailLoading && (
+        <View style={sheet.loadingRow}>
+          <ActivityIndicator size="small" color={COLORS.textSub} />
+          <Text style={sheet.loadingText}>정보 불러오는 중...</Text>
+        </View>
+      )}
+
+      {detail && !detailLoading && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sheet.chips}>
+          {detail.openNow != null && (
+            <View style={[sheet.chip, { backgroundColor: detail.openNow ? '#E8F5E9' : '#FFEBEE' }]}>
+              <Text style={[sheet.chipText, { color: detail.openNow ? '#2E7D32' : '#C62828' }]}>
+                {detail.openNow ? '영업 중' : '영업 종료'}
+              </Text>
+            </View>
+          )}
+          {!!detail.todayHours && (
+            <View style={sheet.chip}>
+              <Text style={sheet.chipText}>🕐 {detail.todayHours}</Text>
+            </View>
+          )}
+          {stars && (
+            <View style={sheet.chip}>
+              <Text style={sheet.chipText}>
+                <Text style={{ color: '#FFA000' }}>{detail.rating?.toFixed(1)} </Text>
+                <Text style={{ color: '#FFA000', fontSize: 11 }}>{stars}</Text>
+                {detail.userRatingsTotal != null && (
+                  <Text style={{ color: COLORS.textSub }}> ({detail.userRatingsTotal.toLocaleString()})</Text>
+                )}
+              </Text>
+            </View>
+          )}
+          {price && (
+            <View style={sheet.chip}>
+              <Text style={sheet.chipText}>{price}</Text>
+            </View>
+          )}
+          {!!detail.phone && (
+            <TouchableOpacity style={sheet.chip} onPress={() => Linking.openURL(`tel:${detail.phone}`)}>
+              <Text style={sheet.chipText}>📞 {detail.phone}</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      )}
+
+      <TouchableOpacity style={[sheet.actionBtn, { backgroundColor: actionColor }]} onPress={onAction}>
+        <Text style={sheet.actionText}>{actionLabel}</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
+const sheet = StyleSheet.create({
+  container: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1, shadowRadius: 10, elevation: 12,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 12,
+  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  dot: { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
+  headerTexts: { flex: 1 },
+  name: { fontSize: 16, fontWeight: '800', color: COLORS.text },
+  address: { fontSize: 11, color: COLORS.textSub, marginTop: 2 },
+  closeBtn: { padding: 4 },
+  closeText: { fontSize: 14, color: '#ccc' },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  loadingText: { fontSize: 12, color: COLORS.textSub },
+  chips: { flexDirection: 'row', gap: 8, paddingVertical: 4, marginBottom: 12 },
+  chip: {
+    backgroundColor: '#F5F5F5', paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 20, flexShrink: 0,
+  },
+  chipText: { fontSize: 12, fontWeight: '600', color: COLORS.text },
+  actionBtn: {
+    paddingVertical: 13, borderRadius: 16, alignItems: 'center', marginTop: 4,
+  },
+  actionText: { color: 'white', fontSize: 14, fontWeight: '800' },
+})
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -610,32 +786,4 @@ const styles = StyleSheet.create({
   routeBannerFailed: { backgroundColor: '#FFF3F3' },
   routeBannerFailedText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
 
-  previewCard: {
-    position: 'absolute',
-    bottom: 68, left: 14, right: 14,
-  },
-  previewCardInner: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1.5, borderColor: COLORS.mint,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12, shadowRadius: 8, elevation: 5,
-    gap: 10,
-  },
-  previewCardDot: {
-    width: 12, height: 12, borderRadius: 6,
-    backgroundColor: COLORS.mint, flexShrink: 0,
-  },
-  previewCardTexts: { flex: 1 },
-  previewCardName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  previewCardAddr: { fontSize: 11, color: COLORS.textSub, marginTop: 2 },
-  previewCardAddBtn: {
-    backgroundColor: COLORS.mint,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
-  },
-  previewCardAddText: { color: 'white', fontSize: 12, fontWeight: '700' },
-  previewCardClose: { padding: 4 },
-  previewCardCloseText: { fontSize: 13, color: '#ccc' },
 })
