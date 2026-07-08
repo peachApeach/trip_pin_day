@@ -13,6 +13,7 @@ interface Props {
   onSelect: (id: number) => void
   onRemove: (id: number) => void
   onUpdateDuration: (id: number, duration: number) => void
+  onUpdateBudget: (id: number, budget: number | undefined) => void
   onUpdateDayIndex: (id: number, dayIndex: number) => void
   onReorder: (reordered: Place[]) => void
   onSegmentModeChange: (segIdx: number, mode: TravelMode) => void
@@ -26,7 +27,7 @@ interface Props {
   travelMode: TravelMode
   travelSegments: (TravelSegment | null)[]
   segmentsLoading: boolean
-  segmentModes: TravelMode[]
+  segmentModes: (TravelMode | null)[]
   segmentDurations: (number | null)[]
 }
 
@@ -79,6 +80,7 @@ export default function PlanScreen({
   prevDayLastPlace, onShowMap, onFocusPlace,
   startDate, onStartDateChange, travelMode,
   travelSegments, segmentsLoading, segmentModes, segmentDurations,
+  onUpdateBudget,
 }: Props) {
   const [pickerMode, setPickerMode] = useState<boolean>(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -363,9 +365,23 @@ export default function PlanScreen({
                     <Text style={styles.placeTime}>{formatTime(item.from)} ~ {formatTime(item.to)}</Text>
                   </View>
 
-                  {/* 체류시간 + 투어 버튼 (펼쳐졌을 때) */}
+                  {/* 체류시간 + 예산 + 투어 버튼 (펼쳐졌을 때) */}
                   {isExpanded && (
                     <>
+                      <View style={styles.budgetRow}>
+                        <Text style={styles.budgetLabel}>💰 예상 금액</Text>
+                        <View style={styles.budgetInputWrap}>
+                          <TextInput
+                            style={styles.budgetInput}
+                            keyboardType="number-pad"
+                            placeholder="0"
+                            placeholderTextColor="#ccc"
+                            value={item.budget != null ? String(item.budget) : ''}
+                            onChangeText={v => onUpdateBudget(item.id, v ? parseInt(v.replace(/[^0-9]/g, '')) : undefined)}
+                          />
+                          <Text style={styles.budgetUnit}>원</Text>
+                        </View>
+                      </View>
                       <View style={styles.durationRow}>
                         <Text style={styles.durationLabel}>체류 시간</Text>
                         <View style={styles.durationButtons}>
@@ -472,6 +488,19 @@ export default function PlanScreen({
             </View>
           )
         })}
+
+        {/* 예산 합계 */}
+        {(() => {
+          const budgetedPlaces = places.filter(p => p.budget != null && p.budget > 0)
+          if (budgetedPlaces.length === 0) return null
+          const total = budgetedPlaces.reduce((s, p) => s + (p.budget ?? 0), 0)
+          return (
+            <View style={styles.budgetSummary}>
+              <Text style={styles.budgetSummaryLabel}>💰 이번 일정 예산</Text>
+              <Text style={styles.budgetSummaryAmount}>{total.toLocaleString()}원</Text>
+            </View>
+          )
+        })()}
 
         {/* 종료 */}
         <View style={styles.timelineRow}>
@@ -640,6 +669,32 @@ const styles = StyleSheet.create({
   travelDuration: { fontSize: 12, fontWeight: '700', color: COLORS.textSub },
   travelDistance: { fontSize: 11, color: '#BDBDBD' },
   routeHint: { fontSize: 10, color: COLORS.primary, marginLeft: 'auto', fontWeight: '600' },
+
+  budgetRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingTop: 4,
+  },
+  budgetLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSub },
+  budgetInputWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  budgetInput: {
+    fontSize: 15, fontWeight: '700', color: COLORS.text,
+    minWidth: 60, textAlign: 'right', padding: 0,
+  },
+  budgetUnit: { fontSize: 13, color: COLORS.textSub, fontWeight: '500' },
+
+  budgetSummary: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: 0, marginBottom: 8,
+    backgroundColor: '#FFF8E1',
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#FFE082',
+  },
+  budgetSummaryLabel: { fontSize: 13, fontWeight: '600', color: '#795548' },
+  budgetSummaryAmount: { fontSize: 18, fontWeight: '800', color: '#E65100' },
 
   endCard: {
     flex: 1, backgroundColor: '#E8F5E9', borderRadius: 16,

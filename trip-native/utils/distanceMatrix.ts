@@ -71,7 +71,7 @@ export async function fetchSegment(
 export async function fetchTravelSegments(
   places: Place[],
   defaultMode: TravelMode,
-  segmentModes?: TravelMode[],
+  segmentModes?: (TravelMode | null)[],
   segmentDurations?: (number | null)[]
 ): Promise<(TravelSegment | null)[]> {
   if (places.length < 2) return []

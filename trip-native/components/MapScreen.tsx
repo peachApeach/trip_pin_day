@@ -1,12 +1,23 @@
 import { useRef, useState, useEffect } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Keyboard, FlatList, ScrollView, Linking,
+  ActivityIndicator, Keyboard, FlatList, ScrollView, Linking, Dimensions,
 } from 'react-native'
 import MapView, { Marker, Polyline, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { GOOGLE_MAPS_API_KEY, COLORS, PLACE_COLORS } from '../constants'
 import type { Place } from '../types'
+
+interface ActivityItem {
+  placeId: string
+  name: string
+  address: string
+  rating?: number
+  userRatingsTotal?: number
+  priceLevel?: number
+  photoRef?: string
+  types: string[]
+}
 
 interface PlaceDetail {
   placeId: string
@@ -47,6 +58,67 @@ const INITIAL_REGION: Region = {
   latitudeDelta: 0.05,
   longitudeDelta: 0.05,
 }
+
+const PANEL_TRANSLATE_X = Math.round(Dimensions.get('window').width * 0.72) + 40
+
+const act = StyleSheet.create({
+  tab: {
+    position: 'absolute',
+    left: -36, top: '35%',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14, paddingHorizontal: 9,
+    borderTopLeftRadius: 12, borderBottomLeftRadius: 12,
+    alignItems: 'center', gap: 4,
+    shadowColor: '#000', shadowOffset: { width: -2, height: 0 },
+    shadowOpacity: 0.15, shadowRadius: 6, elevation: 6,
+  },
+  tabIcon: { fontSize: 16, color: 'white', fontWeight: '800' },
+  tabLabel: { fontSize: 9, color: 'white', fontWeight: '700', textAlign: 'center', lineHeight: 13 },
+  panel: {
+    position: 'absolute',
+    top: 0, bottom: 0,
+    width: '72%',
+    backgroundColor: 'white',
+    shadowColor: '#000', shadowOffset: { width: -3, height: 0 },
+    shadowOpacity: 0.15, shadowRadius: 10, elevation: 12,
+    zIndex: 9,
+  },
+  panelOpen: { right: 0 },
+  panelClosed: { right: 0, transform: [{ translateX: PANEL_TRANSLATE_X }] },
+  header: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10,
+    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
+  },
+  title: { fontSize: 15, fontWeight: '800', color: COLORS.text },
+  subtitle: { fontSize: 10, color: COLORS.textSub, marginTop: 2 },
+  closeBtn: { padding: 4 },
+  closeText: { fontSize: 15, color: '#ccc' },
+  loading: { alignItems: 'center', paddingVertical: 40, gap: 12 },
+  loadingText: { fontSize: 12, color: COLORS.textSub },
+  list: { padding: 10, gap: 10, paddingBottom: 40 },
+  card: {
+    backgroundColor: '#FAFAFA', borderRadius: 14, padding: 12,
+    borderWidth: 1, borderColor: '#F0F0F0', gap: 6,
+  },
+  cardName: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  cardAddr: { fontSize: 10, color: COLORS.textSub },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  metaRating: { fontSize: 11, fontWeight: '700', color: '#FFA000' },
+  metaCount: { fontSize: 10, color: COLORS.textSub },
+  metaPrice: { fontSize: 11, fontWeight: '600', color: '#43A047' },
+  cardBtns: { flexDirection: 'row', gap: 6, marginTop: 2 },
+  klookBtn: {
+    flex: 1, paddingVertical: 8, borderRadius: 10,
+    backgroundColor: '#FF6B35', alignItems: 'center',
+  },
+  klookBtnText: { fontSize: 11, fontWeight: '700', color: 'white' },
+  mrtBtn: {
+    flex: 1, paddingVertical: 8, borderRadius: 10,
+    backgroundColor: '#00B4D8', alignItems: 'center',
+  },
+  mrtBtnText: { fontSize: 11, fontWeight: '700', color: 'white' },
+})
 
 export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRoutes, routeCoords, routeStatus, onMapPress, onMarkerPress, onRemove }: Props) {
   const mapRef = useRef<MapView>(null)
@@ -117,6 +189,71 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   const currentRegionRef = useRef<Region>(INITIAL_REGION)
   const [placeDetail, setPlaceDetail] = useState<PlaceDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [showActivities, setShowActivities] = useState(false)
+  const [activities, setActivities] = useState<ActivityItem[]>([])
+  const [activitiesLoading, setActivitiesLoading] = useState(false)
+
+  const fetchActivities = async () => {
+    setActivitiesLoading(true)
+    setActivities([])
+    try {
+      const { latitude, longitude } = currentRegionRef.current
+      const types = 'tourist_attraction'
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=5000&type=${types}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const res = await fetch(url)
+      const data = await res.json()
+      if (data.status === 'OK') {
+        setActivities(data.results.slice(0, 20).map((r: any) => ({
+          placeId: r.place_id,
+          name: r.name ?? '',
+          address: r.vicinity ?? '',
+          rating: r.rating,
+          userRatingsTotal: r.user_ratings_total,
+          priceLevel: r.price_level,
+          photoRef: r.photos?.[0]?.photo_reference,
+          types: r.types ?? [],
+        })))
+      }
+    } catch {}
+    finally { setActivitiesLoading(false) }
+  }
+
+  const handleToggleActivities = () => {
+    if (!showActivities) {
+      setShowActivities(true)
+      fetchActivities()
+    } else {
+      setShowActivities(false)
+    }
+  }
+
+  const renderActivityItem = ({ item }: { item: ActivityItem }) => {
+    const stars = item.rating ? `★ ${item.rating.toFixed(1)}` : null
+    const price = item.priceLevel != null ? '₩'.repeat(item.priceLevel + 1) : null
+    const klookUrl = `https://www.klook.com/ko/search/?query=${encodeURIComponent(item.name)}&af_id=PARTNER_ID`
+    const mrtUrl = `https://www.myrealtrip.com/offers?q=${encodeURIComponent(item.name)}&utm_source=gurmi&utm_medium=app`
+    return (
+      <View style={act.card}>
+        <Text style={act.cardName} numberOfLines={2}>{item.name}</Text>
+        <Text style={act.cardAddr} numberOfLines={1}>📌 {item.address}</Text>
+        <View style={act.cardMeta}>
+          {stars && <Text style={act.metaRating}>{stars}</Text>}
+          {item.userRatingsTotal != null && (
+            <Text style={act.metaCount}>({item.userRatingsTotal.toLocaleString()})</Text>
+          )}
+          {price && <Text style={act.metaPrice}>{price}</Text>}
+        </View>
+        <View style={act.cardBtns}>
+          <TouchableOpacity style={act.klookBtn} onPress={() => Linking.openURL(klookUrl)}>
+            <Text style={act.klookBtnText}>🎫 클룩</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={act.mrtBtn} onPress={() => Linking.openURL(mrtUrl)}>
+            <Text style={act.mrtBtnText}>✈️ MRT</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    )
+  }
 
   const fetchSuggestions = async (text: string) => {
     if (text.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
@@ -567,6 +704,44 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
           </View>
         </View>
       )}
+
+      {/* 사이드 액티비티 패널 (손잡이 포함) */}
+      <View style={[act.panel, showActivities ? act.panelOpen : act.panelClosed]}>
+        {/* 손잡이 — 패널 왼쪽에 붙음 */}
+        <TouchableOpacity style={act.tab} onPress={handleToggleActivities} activeOpacity={0.8}>
+          <Text style={act.tabIcon}>{showActivities ? '›' : '‹'}</Text>
+          <Text style={act.tabLabel}>{'즐\n길\n거\n리'}</Text>
+        </TouchableOpacity>
+
+        <View style={act.header}>
+          <View>
+            <Text style={act.title}>📍 근처 즐길거리</Text>
+            <Text style={act.subtitle}>현재 지도 위치 기준 5km</Text>
+          </View>
+          <TouchableOpacity onPress={() => setShowActivities(false)} style={act.closeBtn}>
+            <Text style={act.closeText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        {activitiesLoading ? (
+          <View style={act.loading}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={act.loadingText}>찾는 중...</Text>
+          </View>
+        ) : activities.length === 0 ? (
+          <View style={act.loading}>
+            <Text style={act.loadingText}>주변에 관광지가 없어요</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={activities}
+            keyExtractor={item => item.placeId}
+            contentContainerStyle={act.list}
+            showsVerticalScrollIndicator={false}
+            renderItem={renderActivityItem}
+          />
+        )}
+      </View>
     </View>
   )
 }

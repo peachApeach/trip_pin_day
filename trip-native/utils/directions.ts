@@ -52,7 +52,7 @@ export async function fetchRoute(
 export async function fetchAllRoutes(
   places: Place[],
   defaultMode: TravelMode,
-  segmentModes: TravelMode[]
+  segmentModes: (TravelMode | null)[]
 ): Promise<{ latitude: number; longitude: number }[][]> {
   if (places.length < 2) return []
   const results = await Promise.all(

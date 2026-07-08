@@ -87,7 +87,7 @@ export default function App() {
     const currentPlaces = prevLast ? [prevLast, ...dayPlaces] : dayPlaces
     const currentMode = activeTrip?.travelMode ?? 'DRIVING'
     const raw = (activeTrip?.segmentModes ?? {})[activeDayIndex]
-    const currentSegmentModes: TravelMode[] = Array.isArray(raw) ? raw : []
+    const currentSegmentModes: (TravelMode | null)[] = Array.isArray(raw) ? raw : []
     if (currentPlaces.length < 2) { setTravelSegments([]); return }
     const gen = ++fetchGenRef.current
     console.log('[App] trigger gen:', gen, 'places:', currentPlaces.length, 'segmentModes:', JSON.stringify(currentSegmentModes))
@@ -114,7 +114,7 @@ export default function App() {
     const currentPlaces = prevLast ? [prevLast, ...dayPlaces] : dayPlaces
     const currentMode = activeTrip?.travelMode ?? 'DRIVING'
     const raw = (activeTrip?.segmentModes ?? {})[activeDayIndex]
-    const currentSegmentModes: TravelMode[] = Array.isArray(raw) ? raw : []
+    const currentSegmentModes: (TravelMode | null)[] = Array.isArray(raw) ? raw : []
     setAllRoutes([])
     if (currentPlaces.length < 2) return
     const gen = ++routeGenRef.current
@@ -147,6 +147,10 @@ export default function App() {
 
   const handleUpdateDuration = useCallback((id: number, duration: number) => {
     updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, duration } : p) }))
+  }, [updateTrip])
+
+  const handleUpdateBudget = useCallback((id: number, budget: number | undefined) => {
+    updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, budget } : p) }))
   }, [updateTrip])
 
   const handleUpdateDayIndex = useCallback((id: number, dayIndex: number) => {
@@ -338,6 +342,8 @@ export default function App() {
     )
   }
 
+  if (!activeTrip) return null
+
   const allPlaces = activeTrip.places
   const places = allPlaces.filter(p => (p.dayIndex ?? 0) === activeDayIndex)
   const prevDayPlaces = activeDayIndex > 0 ? allPlaces.filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
@@ -353,8 +359,8 @@ export default function App() {
   const totalDays = calcTotalDays(activeTrip.tripStartDate, activeTrip.tripEndDate)
 
   function formatDayDate(dayIdx: number) {
-    if (!activeTrip.tripStartDate) return `Day ${dayIdx + 1}`
-    const d = new Date(activeTrip.tripStartDate)
+    if (!activeTrip!.tripStartDate) return `Day ${dayIdx + 1}`
+    const d = new Date(activeTrip!.tripStartDate)
     d.setDate(d.getDate() + dayIdx)
     return `${d.getMonth() + 1}/${d.getDate()}`
   }
@@ -431,6 +437,7 @@ export default function App() {
                 onSelect={setSelectedPlaceId}
                 onRemove={handleRemove}
                 onUpdateDuration={handleUpdateDuration}
+                onUpdateBudget={handleUpdateBudget}
                 onUpdateDayIndex={handleUpdateDayIndex}
                 onReorder={(reordered) => handleReorderPlaces(activeDayIndex, reordered)}
                 onSegmentModeChange={handleSegmentModeChange}

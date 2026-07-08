@@ -4,7 +4,7 @@ export interface Trip {
   places: Place[]
   startDate: string
   travelMode: TravelMode
-  segmentModes: { [dayIndex: number]: TravelMode[] }
+  segmentModes: { [dayIndex: number]: (TravelMode | null)[] }
   segmentDurations: { [dayIndex: number]: (number | null)[] }
   tripStartDate: string | null
   tripEndDate: string | null
@@ -18,6 +18,7 @@ export interface Place {
   address: string
   duration: number
   dayIndex?: number
+  budget?: number
 }
 
 export interface TravelSegment {
