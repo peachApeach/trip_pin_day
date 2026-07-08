@@ -197,7 +197,13 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     setActivitiesLoading(true)
     setActivities([])
     try {
-      const { latitude, longitude } = currentRegionRef.current
+      let latitude = currentRegionRef.current.latitude
+      let longitude = currentRegionRef.current.longitude
+      try {
+        const camera = await mapRef.current?.getCamera()
+        if (camera?.center) { latitude = camera.center.latitude; longitude = camera.center.longitude }
+      } catch {}
+
       const types = 'tourist_attraction'
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=5000&type=${types}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
