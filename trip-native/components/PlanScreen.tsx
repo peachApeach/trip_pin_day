@@ -327,15 +327,41 @@ export default function PlanScreen({
                 </View>
                 {(segmentModes[0] ?? travelMode) === 'OTHER' && (
                   <View style={styles.customDurRow}>
-                    <Text style={styles.customDurLabel}>소요 시간 (분)</Text>
-                    <TextInput
-                      style={styles.customDurInput}
-                      keyboardType="number-pad"
-                      placeholder="예) 45"
-                      placeholderTextColor="#ccc"
-                      value={segmentDurations[0] != null ? String(segmentDurations[0]) : ''}
-                      onChangeText={v => onSegmentDurationChange(-1, v ? parseInt(v) : null)}
-                    />
+                    <Text style={styles.customDurLabel}>소요 시간</Text>
+                    <View style={styles.customDurFields}>
+                      <View style={styles.customDurField}>
+                        <TextInput
+                          style={styles.customDurInput}
+                          keyboardType="number-pad"
+                          placeholder="0"
+                          placeholderTextColor="#ccc"
+                          value={segmentDurations[0] != null ? String(Math.floor(segmentDurations[0] / 60)) : ''}
+                          onChangeText={v => {
+                            const h = parseInt(v) || 0
+                            const m = segmentDurations[0] != null ? segmentDurations[0] % 60 : 0
+                            const total = h * 60 + m
+                            onSegmentDurationChange(-1, total > 0 ? total : null)
+                          }}
+                        />
+                        <Text style={styles.customDurUnit}>시간</Text>
+                      </View>
+                      <View style={styles.customDurField}>
+                        <TextInput
+                          style={styles.customDurInput}
+                          keyboardType="number-pad"
+                          placeholder="0"
+                          placeholderTextColor="#ccc"
+                          value={segmentDurations[0] != null ? String(segmentDurations[0] % 60) : ''}
+                          onChangeText={v => {
+                            const m = Math.min(59, parseInt(v) || 0)
+                            const h = segmentDurations[0] != null ? Math.floor(segmentDurations[0] / 60) : 0
+                            const total = h * 60 + m
+                            onSegmentDurationChange(-1, total > 0 ? total : null)
+                          }}
+                        />
+                        <Text style={styles.customDurUnit}>분</Text>
+                      </View>
+                    </View>
                   </View>
                 )}
                 {firstSeg ? (
@@ -487,18 +513,46 @@ export default function PlanScreen({
                         )
                       })}
                     </View>
-                    {/* OTHER 모드: 직접 분 입력 */}
+                    {/* OTHER 모드: 시간+분 입력 */}
                     {(segmentModes[segOffset + index] ?? travelMode) === 'OTHER' && (
                       <View style={styles.customDurRow}>
-                        <Text style={styles.customDurLabel}>소요 시간 (분)</Text>
-                        <TextInput
-                          style={styles.customDurInput}
-                          keyboardType="number-pad"
-                          placeholder="예) 45"
-                          placeholderTextColor="#ccc"
-                          value={segmentDurations[segOffset + index] != null ? String(segmentDurations[segOffset + index]) : ''}
-                          onChangeText={v => onSegmentDurationChange(index, v ? parseInt(v) : null)}
-                        />
+                        <Text style={styles.customDurLabel}>소요 시간</Text>
+                        <View style={styles.customDurFields}>
+                          <View style={styles.customDurField}>
+                            <TextInput
+                              style={styles.customDurInput}
+                              keyboardType="number-pad"
+                              placeholder="0"
+                              placeholderTextColor="#ccc"
+                              value={segmentDurations[segOffset + index] != null ? String(Math.floor((segmentDurations[segOffset + index] as number) / 60)) : ''}
+                              onChangeText={v => {
+                                const h = parseInt(v) || 0
+                                const cur = segmentDurations[segOffset + index]
+                                const m = cur != null ? cur % 60 : 0
+                                const total = h * 60 + m
+                                onSegmentDurationChange(index, total > 0 ? total : null)
+                              }}
+                            />
+                            <Text style={styles.customDurUnit}>시간</Text>
+                          </View>
+                          <View style={styles.customDurField}>
+                            <TextInput
+                              style={styles.customDurInput}
+                              keyboardType="number-pad"
+                              placeholder="0"
+                              placeholderTextColor="#ccc"
+                              value={segmentDurations[segOffset + index] != null ? String((segmentDurations[segOffset + index] as number) % 60) : ''}
+                              onChangeText={v => {
+                                const m = Math.min(59, parseInt(v) || 0)
+                                const cur = segmentDurations[segOffset + index]
+                                const h = cur != null ? Math.floor(cur / 60) : 0
+                                const total = h * 60 + m
+                                onSegmentDurationChange(index, total > 0 ? total : null)
+                              }}
+                            />
+                            <Text style={styles.customDurUnit}>분</Text>
+                          </View>
+                        </View>
                       </View>
                     )}
                     {/* 계산된 이동시간/거리 */}
@@ -729,11 +783,14 @@ const styles = StyleSheet.create({
   segModeIcon: { fontSize: 16 },
   customDurRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   customDurLabel: { fontSize: 12, color: COLORS.textSub, fontWeight: '500' },
+  customDurFields: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  customDurField: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   customDurInput: {
-    flex: 1, borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 5,
+    width: 52, borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 10,
+    paddingHorizontal: 8, paddingVertical: 5,
     fontSize: 14, fontWeight: '700', color: COLORS.text, textAlign: 'center',
   },
+  customDurUnit: { fontSize: 12, fontWeight: '600', color: COLORS.textSub },
   segInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   segInfoEmpty: { fontSize: 11, color: '#BDBDBD' },
   travelIcon: { fontSize: 14 },
