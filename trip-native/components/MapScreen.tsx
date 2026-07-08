@@ -64,7 +64,7 @@ const PANEL_TRANSLATE_X = Math.round(Dimensions.get('window').width * 0.72)
 const act = StyleSheet.create({
   tab: {
     position: 'absolute',
-    left: -36, top: '35%',
+    right: '100%', top: '35%',
     backgroundColor: COLORS.primary,
     paddingVertical: 14, paddingHorizontal: 9,
     borderTopLeftRadius: 12, borderBottomLeftRadius: 12,
