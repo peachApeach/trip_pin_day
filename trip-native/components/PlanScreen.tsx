@@ -56,14 +56,26 @@ function addMinutes(date: Date, minutes: number) {
 }
 
 // utcOffsetMinutes가 있으면 해당 시간대 현지 시각 반환, 없으면 로컬 시각 그대로
-function formatTime(date: Date, utcOffsetMinutes?: number) {
+function toLocalDate(date: Date, utcOffsetMinutes?: number): Date {
   if (utcOffsetMinutes != null) {
     const utcMs = date.getTime() + date.getTimezoneOffset() * 60000
-    const localMs = utcMs + utcOffsetMinutes * 60000
-    const d = new Date(localMs)
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return new Date(utcMs + utcOffsetMinutes * 60000)
   }
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  return date
+}
+
+function formatTime(date: Date, utcOffsetMinutes?: number) {
+  const d = toLocalDate(date, utcOffsetMinutes)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+// 기준 날짜(startDate 현지)와 비교해서 날짜가 넘어간 일수 반환
+function dayOffset(base: Date, target: Date, utcOffsetMinutes?: number): number {
+  const baseLocal = toLocalDate(base, utcOffsetMinutes)
+  const targetLocal = toLocalDate(target, utcOffsetMinutes)
+  const baseMidnight = Date.UTC(baseLocal.getFullYear(), baseLocal.getMonth(), baseLocal.getDate())
+  const targetMidnight = Date.UTC(targetLocal.getFullYear(), targetLocal.getMonth(), targetLocal.getDate())
+  return Math.round((targetMidnight - baseMidnight) / 86400000)
 }
 
 function formatDuration(minutes: number) {
@@ -144,8 +156,11 @@ export default function PlanScreen({
     return { ...place, fromUtc, toUtc, travelTo }
   })
   const endTimeUtc = new Date(currentTimeUtc)
-  // 종료 시각은 마지막 장소 시간대 기준으로 표시
   const lastPlaceOffset = places[places.length - 1]?.utcOffsetMinutes
+  // 출발 시각을 날짜 비교 기준으로 사용 (첫 장소 현지 기준)
+  const dayBaseUtc = firstPlaceOffset != null
+    ? new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000 - firstPlaceOffset * 60000)
+    : startDate
 
   const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
     if (Platform.OS === 'android') setPickerMode(false)
@@ -387,9 +402,21 @@ export default function PlanScreen({
           return (
             <View key={item.id}>
               {/* 장소 행 */}
+              {(() => {
+                const dOff = dayOffset(dayBaseUtc, item.fromUtc, item.utcOffsetMinutes)
+                const prevDOff = index === 0 ? 0 : dayOffset(dayBaseUtc, schedule[index - 1].fromUtc, schedule[index - 1].utcOffsetMinutes)
+                return dOff > 0 && dOff !== prevDOff ? (
+                  <View style={styles.dateBadgeRow}>
+                    <Text style={styles.dateBadgeText}>+{dOff}일 차</Text>
+                  </View>
+                ) : null
+              })()}
               <View style={styles.timelineRow}>
                 <View style={styles.timelineLeft}>
                   <Text style={styles.timeText}>{formatTime(item.fromUtc, item.utcOffsetMinutes)}</Text>
+                  {dayOffset(dayBaseUtc, item.fromUtc, item.utcOffsetMinutes) > 0 && (
+                    <Text style={styles.dayOffsetText}>+{dayOffset(dayBaseUtc, item.fromUtc, item.utcOffsetMinutes)}일</Text>
+                  )}
                   <View style={[styles.timelineDot, { backgroundColor: color.dot }]} />
                   <View style={[styles.timelineLine, { backgroundColor: color.dot + '30' }]} />
                 </View>
@@ -424,6 +451,9 @@ export default function PlanScreen({
                   <View style={styles.placeFooter}>
                     <Text style={styles.placeTime}>
                       {formatTime(item.fromUtc, item.utcOffsetMinutes)} ~ {formatTime(item.toUtc, item.utcOffsetMinutes)}{tzLabel(item.utcOffsetMinutes)}
+                      {dayOffset(dayBaseUtc, item.toUtc, item.utcOffsetMinutes) > 0 && (
+                        <Text style={styles.placeTimeDayOffset}> (+{dayOffset(dayBaseUtc, item.toUtc, item.utcOffsetMinutes)}일)</Text>
+                      )}
                     </Text>
                   </View>
 
@@ -632,6 +662,9 @@ export default function PlanScreen({
         <View style={styles.timelineRow}>
           <View style={styles.timelineLeft}>
             <Text style={styles.timeText}>{formatTime(endTimeUtc, lastPlaceOffset)}</Text>
+            {dayOffset(dayBaseUtc, endTimeUtc, lastPlaceOffset) > 0 && (
+              <Text style={styles.dayOffsetText}>+{dayOffset(dayBaseUtc, endTimeUtc, lastPlaceOffset)}일</Text>
+            )}
             <View style={[styles.timelineDot, { backgroundColor: '#43A047' }]} />
           </View>
           <View style={styles.endCard}>
@@ -723,7 +756,16 @@ const styles = StyleSheet.create({
   list: { padding: 16, paddingBottom: 40 },
   timelineRow: { flexDirection: 'row', gap: 12 },
   timelineLeft: { width: 52, alignItems: 'center' },
-  timeText: { fontSize: 12, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
+  timeText: { fontSize: 12, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
+  dayOffsetText: { fontSize: 9, fontWeight: '700', color: COLORS.primary, marginBottom: 2 },
+  dateBadgeRow: {
+    marginLeft: 64, marginBottom: 4, marginTop: 2,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.primaryLight, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  dateBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
+  placeTimeDayOffset: { fontSize: 10, color: COLORS.primary, fontWeight: '700' },
   travelTimeText: { fontSize: 11, color: COLORS.textSub, marginBottom: 4 },
   timelineDot: {
     width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: 'white',
