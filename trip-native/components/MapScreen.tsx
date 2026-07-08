@@ -40,7 +40,7 @@ interface Props {
   allRoutes: { latitude: number; longitude: number }[][]
   routeCoords: { latitude: number; longitude: number }[]
   routeStatus: 'idle' | 'loading' | 'ok' | 'failed'
-  onMapPress: (info: { lat: number; lng: number; name: string; address: string }) => void
+  onMapPress: (info: { lat: number; lng: number; name: string; address: string; utcOffsetMinutes?: number }) => void
   onMarkerPress: (id: number) => void
   onRemove: (id: number) => void
 }
@@ -648,12 +648,23 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
           detailLoading={detailLoading}
           actionLabel="+ 일정 추가"
           actionColor={COLORS.mint}
-          onAction={() => {
+          onAction={async () => {
             const name = placeDetail?.name || previewMarker.name
             const address = placeDetail?.address || previewMarker.address
-            onMapPress({ lat: previewMarker.lat, lng: previewMarker.lng, name, address })
+            const lat = previewMarker.lat
+            const lng = previewMarker.lng
             setPreviewMarker(null)
             setPlaceDetail(null)
+            let utcOffsetMinutes: number | undefined
+            try {
+              const tsUrl = `https://maps.googleapis.com/maps/api/timezone/json?location=${lat},${lng}&timestamp=${Math.floor(Date.now() / 1000)}&key=${GOOGLE_MAPS_API_KEY}`
+              const tsRes = await fetch(tsUrl)
+              const tsData = await tsRes.json()
+              if (tsData.status === 'OK') {
+                utcOffsetMinutes = Math.round((tsData.rawOffset + tsData.dstOffset) / 60)
+              }
+            } catch {}
+            onMapPress({ lat, lng, name, address, utcOffsetMinutes })
           }}
           onClose={() => { setPreviewMarker(null); setPlaceDetail(null) }}
         />

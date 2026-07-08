@@ -129,10 +129,10 @@ export default function App() {
     setTrips((prev) => prev.map((t) => activeTrip && t.id === activeTrip.id ? updater(t) : t))
   }, [activeTrip])
 
-  const handleMapPress = useCallback((info: { lat: number; lng: number; name: string; address: string }) => {
+  const handleMapPress = useCallback((info: { lat: number; lng: number; name: string; address: string; utcOffsetMinutes?: number }) => {
     updateTrip((t) => ({
       ...t,
-      places: [...t.places, { id: Date.now(), name: info.name, lat: info.lat, lng: info.lng, address: info.address, duration: 60, dayIndex: activeDayIndex }],
+      places: [...t.places, { id: Date.now(), name: info.name, lat: info.lat, lng: info.lng, address: info.address, duration: 60, dayIndex: activeDayIndex, utcOffsetMinutes: info.utcOffsetMinutes }],
     }))
   }, [updateTrip, activeDayIndex])
 

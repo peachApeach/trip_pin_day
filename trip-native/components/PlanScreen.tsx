@@ -54,13 +54,31 @@ const TRAVEL_MODES: { key: TravelMode; icon: string; label: string }[] = [
 function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60000)
 }
-function formatTime(date: Date) {
+
+// utcOffsetMinutes가 있으면 해당 시간대 현지 시각 반환, 없으면 로컬 시각 그대로
+function formatTime(date: Date, utcOffsetMinutes?: number) {
+  if (utcOffsetMinutes != null) {
+    const utcMs = date.getTime() + date.getTimezoneOffset() * 60000
+    const localMs = utcMs + utcOffsetMinutes * 60000
+    const d = new Date(localMs)
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
+
 function formatDuration(minutes: number) {
   if (minutes < 60) return `${minutes}분`
   const h = Math.floor(minutes / 60), m = minutes % 60
   return m > 0 ? `${h}시간 ${m}분` : `${h}시간`
+}
+
+function tzLabel(utcOffsetMinutes?: number) {
+  if (utcOffsetMinutes == null) return ''
+  const sign = utcOffsetMinutes >= 0 ? '+' : '-'
+  const abs = Math.abs(utcOffsetMinutes)
+  const h = Math.floor(abs / 60)
+  const m = abs % 60
+  return m > 0 ? ` (UTC${sign}${h}:${String(m).padStart(2, '0')})` : ` (UTC${sign}${h})`
 }
 
 
@@ -97,23 +115,37 @@ export default function PlanScreen({
   const ITEM_HEIGHT = 72 // 드래그 모드에서 각 카드 높이
 
   // 타임라인 계산 (prevDayLastPlace 있으면 travelSegments[0]이 전날→오늘 구간)
+  // currentTime은 UTC 절대 시각 기준으로 추적하고, 표시 시에 각 장소의 utcOffsetMinutes로 변환
   const segOffset = prevDayLastPlace ? 1 : 0
   const firstSeg = prevDayLastPlace ? travelSegments[0] : null
-  let currentTime = new Date(startDate)
-  if (firstSeg) currentTime = addMinutes(currentTime, firstSeg.duration)
+
+  // startDate를 첫 번째 장소의 시간대 기준 현지 시각으로 해석해서 UTC로 변환
+  const firstPlaceOffset = places[0]?.utcOffsetMinutes
+  let currentTimeUtc: Date
+  if (firstPlaceOffset != null) {
+    // startDate의 시각(HH:mm)을 첫 장소 현지 시각으로 보고 UTC로 역산
+    const localMs = startDate.getTime() - startDate.getTimezoneOffset() * 60000
+    currentTimeUtc = new Date(localMs - firstPlaceOffset * 60000)
+  } else {
+    currentTimeUtc = new Date(startDate)
+  }
+  if (firstSeg) currentTimeUtc = addMinutes(currentTimeUtc, firstSeg.duration)
+
   const schedule = places.map((place, index) => {
-    const from = new Date(currentTime)
-    currentTime = addMinutes(currentTime, place.duration)
-    const to = new Date(currentTime)
+    const fromUtc = new Date(currentTimeUtc)
+    currentTimeUtc = addMinutes(currentTimeUtc, place.duration)
+    const toUtc = new Date(currentTimeUtc)
     const seg = travelSegments[index + segOffset]
     let travelTo: TravelSegment | null = null
     if (seg && index < places.length - 1) {
       travelTo = seg
-      currentTime = addMinutes(currentTime, seg.duration)
+      currentTimeUtc = addMinutes(currentTimeUtc, seg.duration)
     }
-    return { ...place, from, to, travelTo }
+    return { ...place, fromUtc, toUtc, travelTo }
   })
-  const endTime = new Date(currentTime)
+  const endTimeUtc = new Date(currentTimeUtc)
+  // 종료 시각은 마지막 장소 시간대 기준으로 표시
+  const lastPlaceOffset = places[places.length - 1]?.utcOffsetMinutes
 
   const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
     if (Platform.OS === 'android') setPickerMode(false)
@@ -331,7 +363,7 @@ export default function PlanScreen({
               {/* 장소 행 */}
               <View style={styles.timelineRow}>
                 <View style={styles.timelineLeft}>
-                  <Text style={styles.timeText}>{formatTime(item.from)}</Text>
+                  <Text style={styles.timeText}>{formatTime(item.fromUtc, item.utcOffsetMinutes)}</Text>
                   <View style={[styles.timelineDot, { backgroundColor: color.dot }]} />
                   <View style={[styles.timelineLine, { backgroundColor: color.dot + '30' }]} />
                 </View>
@@ -364,7 +396,9 @@ export default function PlanScreen({
                   )}
 
                   <View style={styles.placeFooter}>
-                    <Text style={styles.placeTime}>{formatTime(item.from)} ~ {formatTime(item.to)}</Text>
+                    <Text style={styles.placeTime}>
+                      {formatTime(item.fromUtc, item.utcOffsetMinutes)} ~ {formatTime(item.toUtc, item.utcOffsetMinutes)}{tzLabel(item.utcOffsetMinutes)}
+                    </Text>
                   </View>
 
                   {/* 체류시간 + 예산 + 투어 버튼 (펼쳐졌을 때) */}
@@ -429,7 +463,7 @@ export default function PlanScreen({
               {index < places.length - 1 && (
                 <View style={styles.timelineRow}>
                   <View style={styles.timelineLeft}>
-                    <Text style={styles.travelTimeText}>{formatTime(item.to)}</Text>
+                    <Text style={styles.travelTimeText}>{formatTime(item.toUtc, item.utcOffsetMinutes)}</Text>
                     <View style={styles.travelDot} />
                     <View style={styles.timelineLine} />
                   </View>
@@ -543,12 +577,14 @@ export default function PlanScreen({
         {/* 종료 */}
         <View style={styles.timelineRow}>
           <View style={styles.timelineLeft}>
-            <Text style={styles.timeText}>{formatTime(endTime)}</Text>
+            <Text style={styles.timeText}>{formatTime(endTimeUtc, lastPlaceOffset)}</Text>
             <View style={[styles.timelineDot, { backgroundColor: '#43A047' }]} />
           </View>
           <View style={styles.endCard}>
             <Text style={styles.endCardText}>🏁  여행 종료</Text>
-            <Text style={styles.endCardSub}>{formatTime(startDate)} ~ {formatTime(endTime)}</Text>
+            <Text style={styles.endCardSub}>
+              {formatTime(startDate, firstPlaceOffset)} ~ {formatTime(endTimeUtc, lastPlaceOffset)}
+            </Text>
           </View>
         </View>
       </ScrollView>
