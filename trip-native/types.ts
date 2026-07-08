@@ -25,6 +25,7 @@ export interface Place {
   duration: number
   dayIndex?: number
   budget?: number
+  budgetCurrency?: string
 }
 
 export interface TravelSegment {

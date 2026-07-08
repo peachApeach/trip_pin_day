@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, Platform, Linking, PanResponder,
+  StyleSheet, ActivityIndicator, Platform, Linking, PanResponder, Modal,
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
-import { COLORS, PLACE_COLORS } from '../constants'
+import { COLORS, PLACE_COLORS, G20_CURRENCIES } from '../constants'
 import type { Place, TravelMode, TravelSegment } from '../types'
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
   onRemove: (id: number) => void
   onUpdateDuration: (id: number, duration: number) => void
   onUpdateBudget: (id: number, budget: number | undefined) => void
+  onUpdateBudgetCurrency: (id: number, currency: string) => void
   onUpdateDayIndex: (id: number, dayIndex: number) => void
   onReorder: (reordered: Place[]) => void
   onSegmentModeChange: (segIdx: number, mode: TravelMode) => void
@@ -80,10 +81,11 @@ export default function PlanScreen({
   prevDayLastPlace, onShowMap, onFocusPlace,
   startDate, onStartDateChange, travelMode,
   travelSegments, segmentsLoading, segmentModes, segmentDurations,
-  onUpdateBudget,
+  onUpdateBudget, onUpdateBudgetCurrency,
 }: Props) {
   const [pickerMode, setPickerMode] = useState<boolean>(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [currencyPickerId, setCurrencyPickerId] = useState<number | null>(null)
   const [dragOrder, setDragOrder] = useState<number[] | null>(null)
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
   const [dragOffsetY, setDragOffsetY] = useState(0)
@@ -371,6 +373,12 @@ export default function PlanScreen({
                       <View style={styles.budgetRow}>
                         <Text style={styles.budgetLabel}>💰 예상 금액</Text>
                         <View style={styles.budgetInputWrap}>
+                          <TouchableOpacity style={styles.currencyBtn} onPress={() => setCurrencyPickerId(item.id)}>
+                            <Text style={styles.currencyBtnText}>
+                              {G20_CURRENCIES.find(c => c.code === (item.budgetCurrency ?? 'KRW'))?.symbol ?? '₩'}
+                            </Text>
+                            <Text style={styles.currencyBtnCode}>{item.budgetCurrency ?? 'KRW'}</Text>
+                          </TouchableOpacity>
                           <TextInput
                             style={styles.budgetInput}
                             keyboardType="number-pad"
@@ -379,7 +387,6 @@ export default function PlanScreen({
                             value={item.budget != null ? String(item.budget) : ''}
                             onChangeText={v => onUpdateBudget(item.id, v ? parseInt(v.replace(/[^0-9]/g, '')) : undefined)}
                           />
-                          <Text style={styles.budgetUnit}>원</Text>
                         </View>
                       </View>
                       <View style={styles.durationRow}>
@@ -406,20 +413,12 @@ export default function PlanScreen({
                       </View>
                       <View style={styles.tourRow}>
                         <Text style={styles.tourLabel}>이 장소 근처 투어</Text>
-                        <View style={styles.tourBtns}>
-                          <TouchableOpacity
-                            style={styles.tourBtn}
-                            onPress={() => Linking.openURL(getKlookUrl(item.name))}
-                          >
-                            <Text style={styles.tourBtnText}>🎫 클룩</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.tourBtn, styles.tourBtnMrt]}
-                            onPress={() => Linking.openURL(getMrtUrl(item.name))}
-                          >
-                            <Text style={[styles.tourBtnText, styles.tourBtnMrtText]}>✈️ 마이리얼트립</Text>
-                          </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity
+                          style={styles.tourBtn}
+                          onPress={() => Linking.openURL(getKlookUrl(item.name))}
+                        >
+                          <Text style={styles.tourBtnText}>🎫 클룩</Text>
+                        </TouchableOpacity>
                       </View>
                     </>
                   )}
@@ -489,15 +488,54 @@ export default function PlanScreen({
           )
         })}
 
-        {/* 예산 합계 */}
+        {/* 통화 선택 모달 */}
+        <Modal visible={currencyPickerId !== null} transparent animationType="fade" onRequestClose={() => setCurrencyPickerId(null)}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCurrencyPickerId(null)}>
+            <View style={styles.currencyList}>
+              <Text style={styles.currencyListTitle}>통화 선택</Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {G20_CURRENCIES.map(c => {
+                  const currentPlace = places.find(p => p.id === currencyPickerId)
+                  const isActive = (currentPlace?.budgetCurrency ?? 'KRW') === c.code
+                  return (
+                    <TouchableOpacity
+                      key={c.code}
+                      style={[styles.currencyItem, isActive && styles.currencyItemActive]}
+                      onPress={() => { if (currencyPickerId !== null) { onUpdateBudgetCurrency(currencyPickerId, c.code); setCurrencyPickerId(null) } }}
+                    >
+                      <Text style={styles.currencyItemSymbol}>{c.symbol}</Text>
+                      <Text style={styles.currencyItemCode}>{c.code}</Text>
+                      <Text style={styles.currencyItemLabel}>{c.label}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* 예산 합계 — 통화별 그룹 */}
         {(() => {
           const budgetedPlaces = places.filter(p => p.budget != null && p.budget > 0)
           if (budgetedPlaces.length === 0) return null
-          const total = budgetedPlaces.reduce((s, p) => s + (p.budget ?? 0), 0)
+          const grouped: Record<string, number> = {}
+          budgetedPlaces.forEach(p => {
+            const code = p.budgetCurrency ?? 'KRW'
+            grouped[code] = (grouped[code] ?? 0) + (p.budget ?? 0)
+          })
           return (
             <View style={styles.budgetSummary}>
               <Text style={styles.budgetSummaryLabel}>💰 이번 일정 예산</Text>
-              <Text style={styles.budgetSummaryAmount}>{total.toLocaleString()}원</Text>
+              <View style={styles.budgetSummaryAmounts}>
+                {Object.entries(grouped).map(([code, total]) => {
+                  const sym = G20_CURRENCIES.find(c => c.code === code)?.symbol ?? code
+                  return (
+                    <Text key={code} style={styles.budgetSummaryAmount}>
+                      {sym}{total.toLocaleString()}
+                    </Text>
+                  )
+                })}
+              </View>
             </View>
           )
         })()}
@@ -623,14 +661,11 @@ const styles = StyleSheet.create({
 
   tourRow: { gap: 6, paddingTop: 4 },
   tourLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
-  tourBtns: { flexDirection: 'row', gap: 8 },
   tourBtn: {
-    flex: 1, paddingVertical: 8, borderRadius: 12,
-    backgroundColor: '#FF6B35', alignItems: 'center',
+    alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16,
+    borderRadius: 12, backgroundColor: '#FF6B35', alignItems: 'center',
   },
-  tourBtnMrt: { backgroundColor: '#00B4D8' },
   tourBtnText: { fontSize: 12, fontWeight: '700', color: 'white' },
-  tourBtnMrtText: { color: 'white' },
 
   durationRow: { gap: 6, paddingTop: 4 },
   durationLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
@@ -676,25 +711,47 @@ const styles = StyleSheet.create({
   },
   budgetLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSub },
   budgetInputWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
     borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 4,
+    paddingHorizontal: 8, paddingVertical: 4,
   },
+  currencyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    backgroundColor: COLORS.primaryLight, borderRadius: 7,
+    paddingHorizontal: 7, paddingVertical: 3,
+  },
+  currencyBtnText: { fontSize: 13, fontWeight: '800', color: COLORS.primary },
+  currencyBtnCode: { fontSize: 10, fontWeight: '700', color: COLORS.primary },
   budgetInput: {
     fontSize: 15, fontWeight: '700', color: COLORS.text,
-    minWidth: 60, textAlign: 'right', padding: 0,
+    minWidth: 70, textAlign: 'right', padding: 0,
   },
-  budgetUnit: { fontSize: 13, color: COLORS.textSub, fontWeight: '500' },
 
   budgetSummary: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 0, marginBottom: 8,
+    marginBottom: 8,
     backgroundColor: '#FFF8E1',
     borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
     borderWidth: 1, borderColor: '#FFE082',
   },
   budgetSummaryLabel: { fontSize: 13, fontWeight: '600', color: '#795548' },
-  budgetSummaryAmount: { fontSize: 18, fontWeight: '800', color: '#E65100' },
+  budgetSummaryAmounts: { alignItems: 'flex-end', gap: 2 },
+  budgetSummaryAmount: { fontSize: 16, fontWeight: '800', color: '#E65100' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  currencyList: {
+    backgroundColor: 'white', borderRadius: 20, padding: 16,
+    width: 280, maxHeight: 400,
+  },
+  currencyListTitle: { fontSize: 15, fontWeight: '800', color: COLORS.text, marginBottom: 12, textAlign: 'center' },
+  currencyItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10,
+  },
+  currencyItemActive: { backgroundColor: COLORS.primaryLight },
+  currencyItemSymbol: { fontSize: 16, width: 24, textAlign: 'center', fontWeight: '700', color: COLORS.primary },
+  currencyItemCode: { fontSize: 13, fontWeight: '700', color: COLORS.text, width: 40 },
+  currencyItemLabel: { fontSize: 12, color: COLORS.textSub, flex: 1 },
 
   endCard: {
     flex: 1, backgroundColor: '#E8F5E9', borderRadius: 16,

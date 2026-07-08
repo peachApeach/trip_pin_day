@@ -153,6 +153,10 @@ export default function App() {
     updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, budget } : p) }))
   }, [updateTrip])
 
+  const handleUpdateBudgetCurrency = useCallback((id: number, budgetCurrency: string) => {
+    updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, budgetCurrency } : p) }))
+  }, [updateTrip])
+
   const handleUpdateDayIndex = useCallback((id: number, dayIndex: number) => {
     updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, dayIndex } : p) }))
   }, [updateTrip])
@@ -438,6 +442,7 @@ export default function App() {
                 onRemove={handleRemove}
                 onUpdateDuration={handleUpdateDuration}
                 onUpdateBudget={handleUpdateBudget}
+                onUpdateBudgetCurrency={handleUpdateBudgetCurrency}
                 onUpdateDayIndex={handleUpdateDayIndex}
                 onReorder={(reordered) => handleReorderPlaces(activeDayIndex, reordered)}
                 onSegmentModeChange={handleSegmentModeChange}
