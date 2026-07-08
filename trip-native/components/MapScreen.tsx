@@ -107,17 +107,11 @@ const act = StyleSheet.create({
   metaRating: { fontSize: 11, fontWeight: '700', color: '#FFA000' },
   metaCount: { fontSize: 10, color: COLORS.textSub },
   metaPrice: { fontSize: 11, fontWeight: '600', color: '#43A047' },
-  cardBtns: { flexDirection: 'row', gap: 6, marginTop: 2 },
   klookBtn: {
-    flex: 1, paddingVertical: 8, borderRadius: 10,
+    marginTop: 6, paddingVertical: 9, borderRadius: 10,
     backgroundColor: '#FF6B35', alignItems: 'center',
   },
-  klookBtnText: { fontSize: 11, fontWeight: '700', color: 'white' },
-  mrtBtn: {
-    flex: 1, paddingVertical: 8, borderRadius: 10,
-    backgroundColor: '#00B4D8', alignItems: 'center',
-  },
-  mrtBtnText: { fontSize: 11, fontWeight: '700', color: 'white' },
+  klookBtnText: { fontSize: 12, fontWeight: '700', color: 'white' },
 })
 
 export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRoutes, routeCoords, routeStatus, onMapPress, onMarkerPress, onRemove }: Props) {
@@ -252,7 +246,6 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     const stars = item.rating ? `★ ${item.rating.toFixed(1)}` : null
     const price = item.priceLevel != null ? '₩'.repeat(item.priceLevel + 1) : null
     const klookUrl = `https://www.klook.com/ko/search/?query=${encodeURIComponent(item.name)}&af_id=PARTNER_ID`
-    const mrtUrl = `https://www.myrealtrip.com/offers?q=${encodeURIComponent(item.name)}&utm_source=gurmi&utm_medium=app`
     return (
       <TouchableOpacity style={act.card} onPress={() => handleActivityPress(item)} activeOpacity={0.75}>
         <Text style={act.cardName} numberOfLines={2}>{item.name}</Text>
@@ -264,14 +257,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
           )}
           {price && <Text style={act.metaPrice}>{price}</Text>}
         </View>
-        <View style={act.cardBtns}>
-          <TouchableOpacity style={act.klookBtn} onPress={() => Linking.openURL(klookUrl)}>
-            <Text style={act.klookBtnText}>🎫 클룩</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={act.mrtBtn} onPress={() => Linking.openURL(mrtUrl)}>
-            <Text style={act.mrtBtnText}>✈️ MRT</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={act.klookBtn} onPress={(e) => { e.stopPropagation(); Linking.openURL(klookUrl) }}>
+          <Text style={act.klookBtnText}>🎫 클룩에서 예약하기</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
     )
   }
