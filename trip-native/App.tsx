@@ -11,7 +11,7 @@ import TripListScreen from './components/TripListScreen'
 import TripOverviewScreen from './components/TripOverviewScreen'
 import { fetchTravelSegments, fetchSegment } from './utils/distanceMatrix'
 import { fetchRoute, fetchAllRoutes } from './utils/directions'
-import { COLORS } from './constants'
+import { COLORS, GOOGLE_MAPS_API_KEY } from './constants'
 import type { Trip, Place, TravelMode, TravelSegment, TabKey } from './types'
 
 export default function App() {
@@ -70,6 +70,39 @@ export default function App() {
         }))
         setTrips(fixed)
         AsyncStorage.setItem('trips', JSON.stringify(fixed)).catch(() => {})
+
+        // utcOffsetMinutes 없는 장소들 Timezone API로 일괄 채우기
+        const missingPlaces: { tripId: number; placeId: number; lat: number; lng: number }[] = []
+        fixed.forEach(t => t.places.forEach(p => {
+          if (p.utcOffsetMinutes == null) missingPlaces.push({ tripId: t.id, placeId: p.id, lat: p.lat, lng: p.lng })
+        }))
+        if (missingPlaces.length > 0) {
+          const timestamp = Math.floor(Date.now() / 1000)
+          Promise.all(missingPlaces.map(async ({ tripId, placeId, lat, lng }) => {
+            try {
+              const res = await fetch(`https://maps.googleapis.com/maps/api/timezone/json?location=${lat},${lng}&timestamp=${timestamp}&key=${GOOGLE_MAPS_API_KEY}`)
+              const data = await res.json()
+              if (data.status === 'OK') {
+                return { tripId, placeId, utcOffsetMinutes: Math.round((data.rawOffset + data.dstOffset) / 60) }
+              }
+            } catch {}
+            return null
+          })).then(results => {
+            const updates = results.filter((r): r is { tripId: number; placeId: number; utcOffsetMinutes: number } => r !== null)
+            if (updates.length === 0) return
+            setTrips(prev => {
+              const next = prev.map(t => ({
+                ...t,
+                places: t.places.map(p => {
+                  const u = updates.find(r => r.tripId === t.id && r.placeId === p.id)
+                  return u ? { ...p, utcOffsetMinutes: u.utcOffsetMinutes } : p
+                }),
+              }))
+              AsyncStorage.setItem('trips', JSON.stringify(next)).catch(() => {})
+              return next
+            })
+          })
+        }
       }
       setLoaded(true)
     }).catch(() => setLoaded(true))
