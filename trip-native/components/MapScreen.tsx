@@ -59,7 +59,7 @@ const INITIAL_REGION: Region = {
   longitudeDelta: 0.05,
 }
 
-const PANEL_TRANSLATE_X = Math.round(Dimensions.get('window').width * 0.72) + 40
+const PANEL_TRANSLATE_X = Math.round(Dimensions.get('window').width * 0.72)
 
 const act = StyleSheet.create({
   tab: {
