@@ -233,13 +233,28 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     }
   }
 
+  const handleActivityPress = async (item: ActivityItem) => {
+    setShowActivities(false)
+    onMarkerPress(0)
+    setDetailLoading(true)
+    setPlaceDetail(null)
+    const detail = await fetchPlaceDetail(item.placeId)
+    setDetailLoading(false)
+    if (!detail) return
+    setPreviewMarker(detail)
+    mapRef.current?.animateToRegion({
+      latitude: detail.lat, longitude: detail.lng,
+      latitudeDelta: 0.01, longitudeDelta: 0.01,
+    }, 500)
+  }
+
   const renderActivityItem = ({ item }: { item: ActivityItem }) => {
     const stars = item.rating ? `★ ${item.rating.toFixed(1)}` : null
     const price = item.priceLevel != null ? '₩'.repeat(item.priceLevel + 1) : null
     const klookUrl = `https://www.klook.com/ko/search/?query=${encodeURIComponent(item.name)}&af_id=PARTNER_ID`
     const mrtUrl = `https://www.myrealtrip.com/offers?q=${encodeURIComponent(item.name)}&utm_source=gurmi&utm_medium=app`
     return (
-      <View style={act.card}>
+      <TouchableOpacity style={act.card} onPress={() => handleActivityPress(item)} activeOpacity={0.75}>
         <Text style={act.cardName} numberOfLines={2}>{item.name}</Text>
         <Text style={act.cardAddr} numberOfLines={1}>📌 {item.address}</Text>
         <View style={act.cardMeta}>
@@ -257,7 +272,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
             <Text style={act.mrtBtnText}>✈️ MRT</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     )
   }
 
