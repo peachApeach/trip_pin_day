@@ -1,4 +1,5 @@
 import { GOOGLE_MAPS_API_KEY as API_KEY } from '../constants'
+import { latLngParam } from './geo'
 import type { Place, TravelMode, TravelSegment } from '../types'
 
 const MODE_MAP: Partial<Record<TravelMode, string>> = {
@@ -48,9 +49,12 @@ export async function fetchSegment(
     const distance = km >= 1 ? `${km.toFixed(1)} km` : `${Math.round(km * 1000)} m`
     return { duration: customDuration, distance, mode }
   }
+  const origin = latLngParam(from.lat, from.lng)
+  const destination = latLngParam(to.lat, to.lng)
+  // 좌표가 손상된 경우 URL에 그대로 넣지 않는다. 직선거리 추정도 불가능하므로
+  // (haversine이 NaN을 내서 'NaN분'으로 표시됨) 구간 없음으로 처리한다.
+  if (origin == null || destination == null) return null
   try {
-    const origin = `${from.lat},${from.lng}`
-    const destination = `${to.lat},${to.lng}`
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin}&destinations=${destination}&mode=${MODE_MAP[mode]}&language=ko&key=${API_KEY}`
     const res = await fetch(url)
     const data = await res.json()

@@ -6,6 +6,7 @@ import {
 import MapView, { Marker, Polyline, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { GOOGLE_MAPS_API_KEY, COLORS, PLACE_COLORS } from '../constants'
+import { latLngParam } from '../utils/geo'
 import { fetchTimeZone } from '../utils/timezone'
 import type { Place } from '../types'
 
@@ -199,8 +200,10 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
         if (camera?.center) { latitude = camera.center.latitude; longitude = camera.center.longitude }
       } catch {}
 
+      const location = latLngParam(latitude, longitude)
+      if (location == null) return
       const types = 'tourist_attraction'
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=5000&type=${types}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=5000&type=${types}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
       if (data.status === 'OK') {
@@ -269,7 +272,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     if (text.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
     try {
       const { latitude, longitude } = currentRegionRef.current
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&location=${latitude},${longitude}&radius=20000&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const location = latLngParam(latitude, longitude)
+      if (location == null) return
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&location=${location}&radius=20000&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
       if (data.status === 'OK') {
@@ -323,7 +328,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     setPlaceDetail(null)
     try {
       // Nearby Search로 가장 가까운 place_id 찾기
-      const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=${encodeURIComponent(name)}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const location = latLngParam(lat, lng)
+      if (location == null) { setPlaceDetail({ placeId: '', name, address: '', lat, lng }); return }
+      const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&rankby=distance&keyword=${encodeURIComponent(name)}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const nearbyRes = await fetch(nearbyUrl)
       const nearbyData = await nearbyRes.json()
       const placeId = nearbyData?.results?.[0]?.place_id
@@ -385,7 +392,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
 
     try {
       const { latitude, longitude } = currentRegionRef.current
-      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query.trim())}&location=${latitude},${longitude}&radius=20000&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const location = latLngParam(latitude, longitude)
+      if (location == null) { setErrorMsg('현재 지도 위치를 확인할 수 없어요'); return }
+      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query.trim())}&location=${location}&radius=20000&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
 
@@ -460,7 +469,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     setPreviewMarker({ lat: latitude, lng: longitude, name: '선택한 장소', address: '' })
     const id = ++geocodeIdRef.current
     try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
+      const latlng = latLngParam(latitude, longitude)
+      if (latlng == null) return
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latlng}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
       const res = await fetch(url)
       const data = await res.json()
       if (id !== geocodeIdRef.current) return

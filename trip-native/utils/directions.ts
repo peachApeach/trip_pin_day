@@ -1,4 +1,5 @@
 import { GOOGLE_MAPS_API_KEY as API_KEY } from '../constants'
+import { latLngParam } from './geo'
 import type { Place, TravelMode } from '../types'
 
 const MODE_MAP: Partial<Record<TravelMode, string>> = {
@@ -35,9 +36,12 @@ export async function fetchRoute(
   to: Place,
   mode: TravelMode
 ): Promise<{ latitude: number; longitude: number }[]> {
+  const origin = latLngParam(from.lat, from.lng)
+  const destination = latLngParam(to.lat, to.lng)
+  // 좌표가 손상된 경우 URL에 넣지 않는다. straightLine도 NaN 좌표를 그대로
+  // Polyline에 넘기게 되므로 경로 없음(빈 배열)으로 처리한다.
+  if (origin == null || destination == null) return []
   try {
-    const origin = `${from.lat},${from.lng}`
-    const destination = `${to.lat},${to.lng}`
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${MODE_MAP[mode]}&language=ko&key=${API_KEY}`
     const res = await fetch(url)
     const data = await res.json()
