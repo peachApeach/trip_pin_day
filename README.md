@@ -19,7 +19,9 @@
 - **탭 전환 시 지도 상태 유지** — 검색 결과, 지도 위치, 줌 레벨 그대로 유지
 - **현재 위치 자동 이동** — 앱 실행 시 내 위치 기준으로 지도 표시
 - **데이터 영구 저장** — AsyncStorage로 앱 재시작 후에도 여행 데이터 유지
-- **제휴 투어 연결** — 장소 카드에서 클룩/마이리얼트립 투어 검색 연결 (제휴 커미션)
+- **제휴 투어 연결** — 장소 카드와 근처 즐길거리 패널에서 클룩 투어 검색 연결 (제휴 커미션)
+- **시차 처리** — 장소 추가 시 Google Time Zone API로 IANA 타임존을 저장하고, 방문 시각마다 DST(서머타임)를 반영해 오프셋을 계산. 일정은 절대 시각(UTC)을 기준으로 저장하고 화면에는 각 장소의 현지 시각으로 표시
+- **구간 시차 표시** — 시차가 바뀌는 구간에 `+7시간` 배너와 도착지 현지 도착 시각 표시, 날짜가 넘어가면 `+1일` / `-1일` 뱃지 표시
 
 ## 기술 스택
 
@@ -30,7 +32,8 @@
 | Map | react-native-maps |
 | Safe Area | react-native-safe-area-context |
 | Location | expo-location |
-| API | Google Maps (Places Text Search / Geocoding / Distance Matrix / Directions) |
+| API | Google Maps (Places Text Search·Autocomplete·Details·Nearby / Geocoding / Distance Matrix / Directions / Time Zone) |
+| Test | Jest + ts-jest (`npm test`) |
 
 ## 시작하기
 
@@ -54,10 +57,16 @@ EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=여기에_구글맵_API_키_입력
 
 > Google Cloud Console에서 아래 API를 활성화해야 합니다.
 > - Maps SDK for iOS / Android
-> - Places API (Text Search)
+> - Places API (Text Search / Autocomplete / Details / Nearby Search)
 > - Geocoding API
 > - Distance Matrix API
 > - Directions API
+> - Time Zone API
+
+> ⚠️ `EXPO_PUBLIC_` 접두사가 붙은 값은 JS 번들에 평문으로 포함되므로 앱을 배포하면 키를 추출할 수 있습니다.
+> Time Zone·Distance Matrix·Directions는 **웹 서비스 API**여서 Android 앱 제한(패키지명 + SHA-1)이 적용되지 않습니다.
+> 배포 전에 Google Cloud Console에서 **API별 할당량 상한(quota cap)** 을 설정해 과다 청구를 막으세요.
+> 완전한 차단이 필요하면 키를 서버에 두고 프록시를 경유해야 합니다.
 
 ### 3. 앱 실행
 
@@ -98,10 +107,20 @@ trip-native/
 │   ├── TripOverviewScreen.tsx   # 여행 overview (일자별 탭 + 지도 미리보기)
 │   ├── MapScreen.tsx            # 지도, 마커, 검색, POI 탭, preview 카드
 │   └── PlanScreen.tsx           # 장소 목록 + 타임테이블 통합 화면
-└── utils/
-    ├── distanceMatrix.ts        # Google Distance Matrix API (이동 시간/거리 계산)
-    └── directions.ts            # Google Directions API (경로 폴리라인)
+├── utils/
+│   ├── distanceMatrix.ts        # Google Distance Matrix API (이동 시간/거리 계산)
+│   ├── directions.ts            # Google Directions API (경로 폴리라인)
+│   ├── timezone.ts              # Time Zone API 조회, DST 반영 오프셋 계산, 현지 시각 포맷
+│   └── geo.ts                   # 좌표를 URL 쿼리 파라미터로 안전하게 직렬화
+└── __tests__/                   # Jest 테스트 (106개)
 ```
+
+### 좌표 처리 규칙
+
+AsyncStorage에서 읽은 `lat`/`lng`는 타입이 보장되지 않으므로, Google API URL에 직접 보간하지 않고
+반드시 `utils/geo.ts`의 `latLngParam()`을 거칩니다. 숫자 또는 숫자 문자열만 통과시키고 유효 범위를
+검사하며, 그 외에는 `null`을 반환해 요청 자체를 보내지 않습니다. 좌표가 거부되면 직선거리 추정
+fallback도 건너뜁니다 (NaN 좌표로 계산하면 "NaN분"이 표시되기 때문).
 
 ## 환경 변수
 

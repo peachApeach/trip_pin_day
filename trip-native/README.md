@@ -16,14 +16,17 @@
 - **다중 여행 / 일자별 관리**: 여행별, Day별 일정 분리, 당일치기 지원
 - **예산 관리**: 장소별 예상 금액 입력 + Day 합계 표시
 - **근처 즐길거리 패널**: 지도 우측 손잡이 탭으로 현재 위치 기준 5km 관광지 표시, Klook 제휴 연결
+- **시차 처리**: 장소별 IANA 타임존 저장, 방문 시각마다 DST 반영해 현지 시각 표시
+- **구간 시차 배너**: 시차가 바뀌는 구간에 `+7시간` 표시, 날짜 넘어가면 `+1일`/`-1일` 뱃지
 
 ## 기술 스택
 
 - React Native + Expo SDK 54
 - TypeScript
 - react-native-maps
-- Google Maps Platform (Places, Directions, Distance Matrix)
+- Google Maps Platform (Places, Directions, Distance Matrix, Time Zone)
 - AsyncStorage (로컬 저장)
+- Jest + ts-jest
 
 ## 개발 환경 설정
 
@@ -36,6 +39,9 @@ npm install
 ```
 EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_key_here
 ```
+
+> `EXPO_PUBLIC_` 값은 JS 번들에 평문으로 들어갑니다. Time Zone·Distance Matrix·Directions는
+> 웹 서비스 API여서 Android 앱 제한이 적용되지 않으므로, 배포 전 Cloud Console에서 할당량 상한을 설정하세요.
 
 ```bash
 npx expo start
@@ -56,3 +62,5 @@ eas build --profile production --platform android
 ```bash
 npm test
 ```
+
+106개 테스트 — 시차/DST 계산, 좌표 주입 차단, 이동시간·경로 API fallback 커버.
