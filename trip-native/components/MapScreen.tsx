@@ -6,6 +6,7 @@ import {
 import MapView, { Marker, Polyline, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { GOOGLE_MAPS_API_KEY, COLORS, PLACE_COLORS } from '../constants'
+import { fetchTimeZone } from '../utils/timezone'
 import type { Place } from '../types'
 
 interface ActivityItem {
@@ -40,7 +41,7 @@ interface Props {
   allRoutes: { latitude: number; longitude: number }[][]
   routeCoords: { latitude: number; longitude: number }[]
   routeStatus: 'idle' | 'loading' | 'ok' | 'failed'
-  onMapPress: (info: { lat: number; lng: number; name: string; address: string; utcOffsetMinutes?: number }) => void
+  onMapPress: (info: { lat: number; lng: number; name: string; address: string; utcOffsetMinutes?: number; timeZoneId?: string }) => void
   onMarkerPress: (id: number) => void
   onRemove: (id: number) => void
 }
@@ -655,16 +656,12 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
             const lng = previewMarker.lng
             setPreviewMarker(null)
             setPlaceDetail(null)
-            let utcOffsetMinutes: number | undefined
-            try {
-              const tsUrl = `https://maps.googleapis.com/maps/api/timezone/json?location=${lat},${lng}&timestamp=${Math.floor(Date.now() / 1000)}&key=${GOOGLE_MAPS_API_KEY}`
-              const tsRes = await fetch(tsUrl)
-              const tsData = await tsRes.json()
-              if (tsData.status === 'OK') {
-                utcOffsetMinutes = Math.round((tsData.rawOffset + tsData.dstOffset) / 60)
-              }
-            } catch {}
-            onMapPress({ lat, lng, name, address, utcOffsetMinutes })
+            const tz = await fetchTimeZone(lat, lng, Math.floor(Date.now() / 1000))
+            onMapPress({
+              lat, lng, name, address,
+              utcOffsetMinutes: tz?.utcOffsetMinutes,
+              timeZoneId: tz?.timeZoneId,
+            })
           }}
           onClose={() => { setPreviewMarker(null); setPlaceDetail(null) }}
         />

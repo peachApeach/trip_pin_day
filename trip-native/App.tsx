@@ -11,7 +11,8 @@ import TripListScreen from './components/TripListScreen'
 import TripOverviewScreen from './components/TripOverviewScreen'
 import { fetchTravelSegments, fetchSegment } from './utils/distanceMatrix'
 import { fetchRoute, fetchAllRoutes } from './utils/directions'
-import { COLORS, GOOGLE_MAPS_API_KEY } from './constants'
+import { fetchTimeZone, type TimeZoneInfo } from './utils/timezone'
+import { COLORS } from './constants'
 import type { Trip, Place, TravelMode, TravelSegment, TabKey } from './types'
 
 export default function App() {
@@ -71,31 +72,29 @@ export default function App() {
         setTrips(fixed)
         AsyncStorage.setItem('trips', JSON.stringify(fixed)).catch(() => {})
 
-        // utcOffsetMinutes 없는 장소들 Timezone API로 일괄 채우기
-        const missingPlaces: { tripId: number; placeId: number; lat: number; lng: number }[] = []
+        // 시간대 정보(timeZoneId / utcOffsetMinutes) 없는 장소들 Timezone API로 일괄 채우기.
+        // timeZoneId가 있어야 여행 날짜 기준으로 서머타임을 반영할 수 있다.
+        const missingPlaces: { tripId: number; placeId: number; lat: number; lng: number; at: number }[] = []
         fixed.forEach(t => t.places.forEach(p => {
-          if (p.utcOffsetMinutes == null) missingPlaces.push({ tripId: t.id, placeId: p.id, lat: p.lat, lng: p.lng })
+          if (p.timeZoneId != null && p.utcOffsetMinutes != null) return
+          // 여행 시작일 기준으로 조회해야 그 시점 DST가 반영된 오프셋을 받는다
+          const tripStart = t.tripStartDate ? new Date(t.tripStartDate).getTime() : Date.now()
+          const at = Math.floor((Number.isNaN(tripStart) ? Date.now() : tripStart) / 1000)
+          missingPlaces.push({ tripId: t.id, placeId: p.id, lat: p.lat, lng: p.lng, at })
         }))
         if (missingPlaces.length > 0) {
-          const timestamp = Math.floor(Date.now() / 1000)
-          Promise.all(missingPlaces.map(async ({ tripId, placeId, lat, lng }) => {
-            try {
-              const res = await fetch(`https://maps.googleapis.com/maps/api/timezone/json?location=${lat},${lng}&timestamp=${timestamp}&key=${GOOGLE_MAPS_API_KEY}`)
-              const data = await res.json()
-              if (data.status === 'OK') {
-                return { tripId, placeId, utcOffsetMinutes: Math.round((data.rawOffset + data.dstOffset) / 60) }
-              }
-            } catch {}
-            return null
+          Promise.all(missingPlaces.map(async ({ tripId, placeId, lat, lng, at }) => {
+            const tz = await fetchTimeZone(lat, lng, at)
+            return tz ? { tripId, placeId, ...tz } : null
           })).then(results => {
-            const updates = results.filter((r): r is { tripId: number; placeId: number; utcOffsetMinutes: number } => r !== null)
+            const updates = results.filter((r): r is { tripId: number; placeId: number } & TimeZoneInfo => r !== null)
             if (updates.length === 0) return
             setTrips(prev => {
               const next = prev.map(t => ({
                 ...t,
                 places: t.places.map(p => {
                   const u = updates.find(r => r.tripId === t.id && r.placeId === p.id)
-                  return u ? { ...p, utcOffsetMinutes: u.utcOffsetMinutes } : p
+                  return u ? { ...p, utcOffsetMinutes: u.utcOffsetMinutes, timeZoneId: u.timeZoneId } : p
                 }),
               }))
               AsyncStorage.setItem('trips', JSON.stringify(next)).catch(() => {})
@@ -162,10 +161,14 @@ export default function App() {
     setTrips((prev) => prev.map((t) => activeTrip && t.id === activeTrip.id ? updater(t) : t))
   }, [activeTrip])
 
-  const handleMapPress = useCallback((info: { lat: number; lng: number; name: string; address: string; utcOffsetMinutes?: number }) => {
+  const handleMapPress = useCallback((info: { lat: number; lng: number; name: string; address: string; utcOffsetMinutes?: number; timeZoneId?: string }) => {
     updateTrip((t) => ({
       ...t,
-      places: [...t.places, { id: Date.now(), name: info.name, lat: info.lat, lng: info.lng, address: info.address, duration: 60, dayIndex: activeDayIndex, utcOffsetMinutes: info.utcOffsetMinutes }],
+      places: [...t.places, {
+        id: Date.now(), name: info.name, lat: info.lat, lng: info.lng, address: info.address,
+        duration: 60, dayIndex: activeDayIndex,
+        utcOffsetMinutes: info.utcOffsetMinutes, timeZoneId: info.timeZoneId,
+      }],
     }))
   }, [updateTrip, activeDayIndex])
 

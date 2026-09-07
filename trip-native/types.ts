@@ -27,6 +27,7 @@ export interface Place {
   budget?: number
   budgetCurrency?: string
   utcOffsetMinutes?: number
+  timeZoneId?: string
 }
 
 export interface TravelSegment {

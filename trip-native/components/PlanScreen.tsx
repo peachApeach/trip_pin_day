@@ -5,6 +5,10 @@ import {
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
 import { COLORS, PLACE_COLORS, G20_CURRENCIES } from '../constants'
+import {
+  effectiveOffset, zonedWallClockToUtc, formatTimeInZone as formatTime,
+  dayOffsetInZone, dayOffsetLabel, tzLabel, tzShiftLabel,
+} from '../utils/timezone'
 import type { Place, TravelMode, TravelSegment } from '../types'
 
 interface Props {
@@ -55,42 +59,10 @@ function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60000)
 }
 
-// utcOffsetMinutes가 있으면 해당 시간대 현지 시각 반환, 없으면 로컬 시각 그대로
-function toLocalDate(date: Date, utcOffsetMinutes?: number): Date {
-  if (utcOffsetMinutes != null) {
-    const utcMs = date.getTime() + date.getTimezoneOffset() * 60000
-    return new Date(utcMs + utcOffsetMinutes * 60000)
-  }
-  return date
-}
-
-function formatTime(date: Date, utcOffsetMinutes?: number) {
-  const d = toLocalDate(date, utcOffsetMinutes)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-// 기준 날짜(startDate 현지)와 비교해서 날짜가 넘어간 일수 반환
-function dayOffset(base: Date, target: Date, utcOffsetMinutes?: number): number {
-  const baseLocal = toLocalDate(base, utcOffsetMinutes)
-  const targetLocal = toLocalDate(target, utcOffsetMinutes)
-  const baseMidnight = Date.UTC(baseLocal.getFullYear(), baseLocal.getMonth(), baseLocal.getDate())
-  const targetMidnight = Date.UTC(targetLocal.getFullYear(), targetLocal.getMonth(), targetLocal.getDate())
-  return Math.round((targetMidnight - baseMidnight) / 86400000)
-}
-
 function formatDuration(minutes: number) {
   if (minutes < 60) return `${minutes}분`
   const h = Math.floor(minutes / 60), m = minutes % 60
   return m > 0 ? `${h}시간 ${m}분` : `${h}시간`
-}
-
-function tzLabel(utcOffsetMinutes?: number) {
-  if (utcOffsetMinutes == null) return ''
-  const sign = utcOffsetMinutes >= 0 ? '+' : '-'
-  const abs = Math.abs(utcOffsetMinutes)
-  const h = Math.floor(abs / 60)
-  const m = abs % 60
-  return m > 0 ? ` (UTC${sign}${h}:${String(m).padStart(2, '0')})` : ` (UTC${sign}${h})`
 }
 
 
@@ -131,16 +103,12 @@ export default function PlanScreen({
   const segOffset = prevDayLastPlace ? 1 : 0
   const firstSeg = prevDayLastPlace ? travelSegments[0] : null
 
-  // startDate를 첫 번째 장소의 시간대 기준 현지 시각으로 해석해서 UTC로 변환
-  const firstPlaceOffset = places[0]?.utcOffsetMinutes
-  let currentTimeUtc: Date
-  if (firstPlaceOffset != null) {
-    // startDate의 시각(HH:mm)을 첫 장소 현지 시각으로 보고 UTC로 역산
-    const localMs = startDate.getTime() - startDate.getTimezoneOffset() * 60000
-    currentTimeUtc = new Date(localMs - firstPlaceOffset * 60000)
-  } else {
-    currentTimeUtc = new Date(startDate)
-  }
+  // startDate(기기에서 고른 벽시계 시각)를 첫 장소의 현지 시각으로 해석해서 UTC로 변환.
+  // 오프셋은 timeZoneId가 있으면 그 시점 서머타임을 반영한 값을 쓴다.
+  const firstPlaceOffset = places[0] ? effectiveOffset(places[0], startDate) : undefined
+  // 출발 시각(UTC) — 날짜 비교의 기준점이기도 하다
+  const dayBaseUtc = zonedWallClockToUtc(startDate, firstPlaceOffset)
+  let currentTimeUtc = new Date(dayBaseUtc)
   if (firstSeg) currentTimeUtc = addMinutes(currentTimeUtc, firstSeg.duration)
 
   const schedule = places.map((place, index) => {
@@ -153,14 +121,16 @@ export default function PlanScreen({
       travelTo = seg
       currentTimeUtc = addMinutes(currentTimeUtc, seg.duration)
     }
-    return { ...place, fromUtc, toUtc, travelTo }
+    // 각 장소의 오프셋은 실제 방문 시각 기준으로 계산 (여행 중 DST 전환 반영)
+    const offset = effectiveOffset(place, fromUtc)
+    return { ...place, fromUtc, toUtc, travelTo, offset }
   })
   const endTimeUtc = new Date(currentTimeUtc)
-  const lastPlaceOffset = places[places.length - 1]?.utcOffsetMinutes
-  // 출발 시각을 날짜 비교 기준으로 사용 (첫 장소 현지 기준)
-  const dayBaseUtc = firstPlaceOffset != null
-    ? new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000 - firstPlaceOffset * 60000)
-    : startDate
+  const lastPlaceOffset = schedule.length > 0 ? schedule[schedule.length - 1].offset : undefined
+  // 전날 마지막 장소 → 오늘 첫 장소 시차 (있으면 헤더 구간에 표시)
+  const prevDayShift = prevDayLastPlace
+    ? tzShiftLabel(effectiveOffset(prevDayLastPlace, dayBaseUtc), firstPlaceOffset)
+    : null
 
   const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
     if (Platform.OS === 'android') setPickerMode(false)
@@ -238,6 +208,11 @@ export default function PlanScreen({
             <Text style={styles.timePickerText}>{formatTime(startDate)}</Text>
             <Text style={styles.timePickerIcon}>✏️</Text>
           </TouchableOpacity>
+          {firstPlaceOffset != null && (
+            <Text style={styles.headerTzLabel}>
+              {places[0]?.timeZoneId ?? '현지'}{tzLabel(firstPlaceOffset)}
+            </Text>
+          )}
           {segmentsLoading && (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={COLORS.primary} />
@@ -326,6 +301,12 @@ export default function PlanScreen({
                 onPress={() => firstSeg && places[0] && onSegmentPress(prevDayLastPlace!, places[0], firstSeg.mode)}
                 activeOpacity={firstSeg ? 0.7 : 1}
               >
+                {prevDayShift && (
+                  <View style={styles.tzShiftRow}>
+                    <Text style={styles.tzShiftText}>🕐 {prevDayShift}</Text>
+                    <Text style={styles.tzShiftSub}>전날 도착지 대비</Text>
+                  </View>
+                )}
                 <View style={styles.segModeRow}>
                   {TRAVEL_MODES.map(m => {
                     const isActive = (segmentModes[0] ?? travelMode) === m.key
@@ -399,23 +380,27 @@ export default function PlanScreen({
         {schedule.map((item, index) => {
           const color = CARD_COLORS[index % CARD_COLORS.length]
           const isExpanded = expandedId === item.id
+          // 출발 시각(첫 장소 현지) 대비 며칠 넘어갔는지 — 각 장소는 자기 시간대 날짜로 비교
+          const dOffFrom = dayOffsetInZone(dayBaseUtc, item.fromUtc, firstPlaceOffset, item.offset)
+          const dOffTo = dayOffsetInZone(dayBaseUtc, item.toUtc, firstPlaceOffset, item.offset)
+          const prevDOff = index === 0
+            ? 0
+            : dayOffsetInZone(dayBaseUtc, schedule[index - 1].fromUtc, firstPlaceOffset, schedule[index - 1].offset)
           return (
             <View key={item.id}>
               {/* 장소 행 */}
-              {(() => {
-                const dOff = dayOffset(dayBaseUtc, item.fromUtc, item.utcOffsetMinutes)
-                const prevDOff = index === 0 ? 0 : dayOffset(dayBaseUtc, schedule[index - 1].fromUtc, schedule[index - 1].utcOffsetMinutes)
-                return dOff > 0 && dOff !== prevDOff ? (
-                  <View style={styles.dateBadgeRow}>
-                    <Text style={styles.dateBadgeText}>+{dOff}일 차</Text>
-                  </View>
-                ) : null
-              })()}
+              {dOffFrom !== 0 && dOffFrom !== prevDOff && (
+                <View style={styles.dateBadgeRow}>
+                  <Text style={styles.dateBadgeText}>
+                    {dOffFrom > 0 ? `+${dOffFrom}일 차` : `${dOffFrom}일 (현지 날짜 이전)`}
+                  </Text>
+                </View>
+              )}
               <View style={styles.timelineRow}>
                 <View style={styles.timelineLeft}>
-                  <Text style={styles.timeText}>{formatTime(item.fromUtc, item.utcOffsetMinutes)}</Text>
-                  {dayOffset(dayBaseUtc, item.fromUtc, item.utcOffsetMinutes) > 0 && (
-                    <Text style={styles.dayOffsetText}>+{dayOffset(dayBaseUtc, item.fromUtc, item.utcOffsetMinutes)}일</Text>
+                  <Text style={styles.timeText}>{formatTime(item.fromUtc, item.offset)}</Text>
+                  {dayOffsetLabel(dOffFrom) && (
+                    <Text style={styles.dayOffsetText}>{dayOffsetLabel(dOffFrom)}</Text>
                   )}
                   <View style={[styles.timelineDot, { backgroundColor: color.dot }]} />
                   <View style={[styles.timelineLine, { backgroundColor: color.dot + '30' }]} />
@@ -450,9 +435,9 @@ export default function PlanScreen({
 
                   <View style={styles.placeFooter}>
                     <Text style={styles.placeTime}>
-                      {formatTime(item.fromUtc, item.utcOffsetMinutes)} ~ {formatTime(item.toUtc, item.utcOffsetMinutes)}{tzLabel(item.utcOffsetMinutes)}
-                      {dayOffset(dayBaseUtc, item.toUtc, item.utcOffsetMinutes) > 0 && (
-                        <Text style={styles.placeTimeDayOffset}> (+{dayOffset(dayBaseUtc, item.toUtc, item.utcOffsetMinutes)}일)</Text>
+                      {formatTime(item.fromUtc, item.offset)} ~ {formatTime(item.toUtc, item.offset)}{tzLabel(item.offset)}
+                      {dayOffsetLabel(dOffTo) && (
+                        <Text style={styles.placeTimeDayOffset}> ({dayOffsetLabel(dOffTo)})</Text>
                       )}
                     </Text>
                   </View>
@@ -519,7 +504,7 @@ export default function PlanScreen({
               {index < places.length - 1 && (
                 <View style={styles.timelineRow}>
                   <View style={styles.timelineLeft}>
-                    <Text style={styles.travelTimeText}>{formatTime(item.toUtc, item.utcOffsetMinutes)}</Text>
+                    <Text style={styles.travelTimeText}>{formatTime(item.toUtc, item.offset)}</Text>
                     <View style={styles.travelDot} />
                     <View style={styles.timelineLine} />
                   </View>
@@ -528,6 +513,18 @@ export default function PlanScreen({
                     onPress={() => item.travelTo && onSegmentPress(places[index], places[index + 1], item.travelTo.mode)}
                     activeOpacity={item.travelTo ? 0.7 : 1}
                   >
+                    {/* 시차가 바뀌는 구간 안내 */}
+                    {(() => {
+                      const shift = tzShiftLabel(item.offset, schedule[index + 1]?.offset)
+                      return shift ? (
+                        <View style={styles.tzShiftRow}>
+                          <Text style={styles.tzShiftText}>🕐 {shift}</Text>
+                          <Text style={styles.tzShiftSub}>
+                            도착지 현지 {formatTime(schedule[index + 1].fromUtc, schedule[index + 1].offset)} 도착
+                          </Text>
+                        </View>
+                      ) : null
+                    })()}
                     {/* 이동수단 선택 버튼 */}
                     <View style={styles.segModeRow}>
                       {TRAVEL_MODES.map(m => {
@@ -662,15 +659,17 @@ export default function PlanScreen({
         <View style={styles.timelineRow}>
           <View style={styles.timelineLeft}>
             <Text style={styles.timeText}>{formatTime(endTimeUtc, lastPlaceOffset)}</Text>
-            {dayOffset(dayBaseUtc, endTimeUtc, lastPlaceOffset) > 0 && (
-              <Text style={styles.dayOffsetText}>+{dayOffset(dayBaseUtc, endTimeUtc, lastPlaceOffset)}일</Text>
+            {dayOffsetLabel(dayOffsetInZone(dayBaseUtc, endTimeUtc, firstPlaceOffset, lastPlaceOffset)) && (
+              <Text style={styles.dayOffsetText}>
+                {dayOffsetLabel(dayOffsetInZone(dayBaseUtc, endTimeUtc, firstPlaceOffset, lastPlaceOffset))}
+              </Text>
             )}
             <View style={[styles.timelineDot, { backgroundColor: '#43A047' }]} />
           </View>
           <View style={styles.endCard}>
             <Text style={styles.endCardText}>🏁  여행 종료</Text>
             <Text style={styles.endCardSub}>
-              {formatTime(startDate, firstPlaceOffset)} ~ {formatTime(endTimeUtc, lastPlaceOffset)}
+              {formatTime(dayBaseUtc, firstPlaceOffset)} ~ {formatTime(endTimeUtc, lastPlaceOffset)}
             </Text>
           </View>
         </View>
@@ -766,6 +765,14 @@ const styles = StyleSheet.create({
   },
   dateBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
   placeTimeDayOffset: { fontSize: 10, color: COLORS.primary, fontWeight: '700' },
+  tzShiftRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+    backgroundColor: COLORS.yellowLight, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5, marginBottom: 6,
+  },
+  tzShiftText: { fontSize: 11, fontWeight: '700', color: '#8D6E00' },
+  tzShiftSub: { fontSize: 10, color: '#A98A2E' },
+  headerTzLabel: { fontSize: 10, color: COLORS.textSub, fontWeight: '600' },
   travelTimeText: { fontSize: 11, color: COLORS.textSub, marginBottom: 4 },
   timelineDot: {
     width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: 'white',
