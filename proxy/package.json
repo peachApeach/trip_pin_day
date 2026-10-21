@@ -6,6 +6,9 @@
   "scripts": {
     "login": "./wrangler.sh login",
     "secrets": "./wrangler.sh secret put GOOGLE_MAPS_API_KEY && ./wrangler.sh secret put APP_TOKEN",
+    "secrets:google": "./wrangler.sh secret put GOOGLE_MAPS_API_KEY",
+    "secrets:token": "./wrangler.sh secret put APP_TOKEN",
+    "verify": "./verify.sh",
     "dev": "./wrangler.sh dev",
     "deploy": "./wrangler.sh deploy",
     "tail": "./wrangler.sh tail",
