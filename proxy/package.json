@@ -4,9 +4,12 @@
   "private": true,
   "description": "구르미 앱의 Google Maps 웹서비스 API 프록시 (Cloudflare Workers)",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "login": "./wrangler.sh login",
+    "secrets": "./wrangler.sh secret put GOOGLE_MAPS_API_KEY && ./wrangler.sh secret put APP_TOKEN",
+    "dev": "./wrangler.sh dev",
+    "deploy": "./wrangler.sh deploy",
+    "tail": "./wrangler.sh tail",
+    "whoami": "./wrangler.sh whoami"
   },
   "devDependencies": {
     "wrangler": "^4.42.0"
