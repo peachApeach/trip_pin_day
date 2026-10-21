@@ -1,5 +1,5 @@
-import { GOOGLE_MAPS_API_KEY as API_KEY } from '../constants'
 import { latLngParam } from './geo'
+import { mapsFetch } from './mapsApi'
 import type { Place, TravelMode } from '../types'
 
 const MODE_MAP: Partial<Record<TravelMode, string>> = {
@@ -42,8 +42,12 @@ export async function fetchRoute(
   // Polyline에 넘기게 되므로 경로 없음(빈 배열)으로 처리한다.
   if (origin == null || destination == null) return []
   try {
-    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${MODE_MAP[mode]}&language=ko&key=${API_KEY}`
-    const res = await fetch(url)
+    const res = await mapsFetch('/directions/json', {
+      origin,
+      destination,
+      mode: MODE_MAP[mode] ?? '',
+      language: 'ko',
+    })
     const data = await res.json()
     const poly = data?.routes?.[0]?.overview_polyline?.points
     if (!poly) return straightLine(from, to)

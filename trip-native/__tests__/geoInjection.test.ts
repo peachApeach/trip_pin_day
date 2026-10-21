@@ -19,7 +19,8 @@ describe('주입 차단 end-to-end', () => {
     const r = await fetchTimeZone(37.5665, 126.978, 1700000000)
     expect(r).toEqual({ timeZoneId: 'Asia/Seoul', utcOffsetMinutes: 540 })
     const url = (global as any).fetch.mock.calls[0][0]
-    expect(url).toContain('location=37.5665,126.978')
+    // URLSearchParams가 쉼표를 %2C로 인코딩한다 — Google이 그대로 받는다.
+    expect(decodeURIComponent(url)).toContain('location=37.5665,126.978')
     expect(url).toContain('timestamp=1700000000')
   })
 

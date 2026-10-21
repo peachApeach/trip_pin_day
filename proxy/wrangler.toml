@@ -1,0 +1,12 @@
+name = "gurmi-maps-proxy"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# 비밀값은 여기에 적지 않는다. 배포 전 아래 명령으로 등록:
+#   npx wrangler secret put GOOGLE_MAPS_API_KEY
+#   npx wrangler secret put APP_TOKEN
+#
+# APP_TOKEN을 등록하지 않으면 토큰 검증이 비활성화된다(로컬 개발용).
+
+[observability]
+enabled = true

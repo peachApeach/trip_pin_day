@@ -1,0 +1,14 @@
+{
+  "name": "gurmi-maps-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "구르미 앱의 Google Maps 웹서비스 API 프록시 (Cloudflare Workers)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.42.0"
+  }
+}

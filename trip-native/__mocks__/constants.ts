@@ -1,4 +1,6 @@
 export const GOOGLE_MAPS_API_KEY = 'TEST_API_KEY'
+export const MAPS_PROXY_URL = ''
+export const MAPS_PROXY_TOKEN = ''
 export const PLACE_COLORS = [
   { bg: '#FFE8EE', dot: '#FF6B8A' },
   { bg: '#E0F7F5', dot: '#4ECDC4' },

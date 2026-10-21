@@ -1,4 +1,12 @@
+// 네이티브 지도 렌더링(Maps SDK)용. 프록시 불가 — 앱에 반드시 포함된다.
+// Cloud Console에서 Android 패키지명+SHA-1 / iOS 번들 ID 제한을 걸어두면
+// 추출해도 다른 곳에서 쓸 수 없다.
 export const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string
+
+// 웹서비스 API(Places/Geocoding/Distance Matrix/Directions/Time Zone) 프록시.
+// 비어 있으면 Google을 직접 호출하며, 그 경우 위 키가 번들에 노출된다.
+export const MAPS_PROXY_URL = (process.env.EXPO_PUBLIC_MAPS_PROXY_URL ?? '') as string
+export const MAPS_PROXY_TOKEN = (process.env.EXPO_PUBLIC_MAPS_PROXY_TOKEN ?? '') as string
 
 export const G20_CURRENCIES = [
   { code: 'KRW', symbol: '₩', label: '한국 원' },

@@ -5,8 +5,9 @@ import {
 } from 'react-native'
 import MapView, { Marker, Polyline, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
-import { GOOGLE_MAPS_API_KEY, COLORS, PLACE_COLORS } from '../constants'
+import { COLORS, PLACE_COLORS } from '../constants'
 import { latLngParam } from '../utils/geo'
+import { mapsFetch } from '../utils/mapsApi'
 import { fetchTimeZone } from '../utils/timezone'
 import type { Place } from '../types'
 
@@ -202,9 +203,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
 
       const location = latLngParam(latitude, longitude)
       if (location == null) return
-      const types = 'tourist_attraction'
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=5000&type=${types}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
-      const res = await fetch(url)
+      const res = await mapsFetch('/place/nearbysearch/json', {
+        location, radius: 5000, type: 'tourist_attraction', language: 'ko',
+      })
       const data = await res.json()
       if (data.status === 'OK') {
         setActivities(data.results.slice(0, 20).map((r: any) => ({
@@ -274,8 +275,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
       const { latitude, longitude } = currentRegionRef.current
       const location = latLngParam(latitude, longitude)
       if (location == null) return
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&location=${location}&radius=20000&language=ko&key=${GOOGLE_MAPS_API_KEY}`
-      const res = await fetch(url)
+      const res = await mapsFetch('/place/autocomplete/json', {
+        input: text, location, radius: 20000, language: 'ko',
+      })
       const data = await res.json()
       if (data.status === 'OK') {
         setSuggestions(data.predictions.slice(0, 5).map((p: any) => ({
@@ -290,8 +292,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   const fetchPlaceDetail = async (placeId: string): Promise<SearchResult | null> => {
     try {
       const fields = 'name,geometry,formatted_address,rating,user_ratings_total,price_level,opening_hours,formatted_phone_number'
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
-      const res = await fetch(url)
+      const res = await mapsFetch('/place/details/json', {
+        place_id: placeId, fields, language: 'ko',
+      })
       const data = await res.json()
       const r = data?.result
       if (!r) return null
@@ -330,8 +333,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
       // Nearby Search로 가장 가까운 place_id 찾기
       const location = latLngParam(lat, lng)
       if (location == null) { setPlaceDetail({ placeId: '', name, address: '', lat, lng }); return }
-      const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&rankby=distance&keyword=${encodeURIComponent(name)}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
-      const nearbyRes = await fetch(nearbyUrl)
+      const nearbyRes = await mapsFetch('/place/nearbysearch/json', {
+        location, rankby: 'distance', keyword: name, language: 'ko',
+      })
       const nearbyData = await nearbyRes.json()
       const placeId = nearbyData?.results?.[0]?.place_id
       if (placeId) {
@@ -394,8 +398,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
       const { latitude, longitude } = currentRegionRef.current
       const location = latLngParam(latitude, longitude)
       if (location == null) { setErrorMsg('현재 지도 위치를 확인할 수 없어요'); return }
-      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query.trim())}&location=${location}&radius=20000&language=ko&key=${GOOGLE_MAPS_API_KEY}`
-      const res = await fetch(url)
+      const res = await mapsFetch('/place/textsearch/json', {
+        query: query.trim(), location, radius: 20000, language: 'ko',
+      })
       const data = await res.json()
 
       if (data.status !== 'OK' || !data.results?.length) {
@@ -418,8 +423,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     setLoadingMore(true)
     try {
       await new Promise((r) => setTimeout(r, 2000))
-      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=${nextPageToken}&key=${GOOGLE_MAPS_API_KEY}`
-      const res = await fetch(url)
+      const res = await mapsFetch('/place/textsearch/json', { pagetoken: nextPageToken })
       const data = await res.json()
       if (data.status === 'OK' && data.results?.length) {
         setResults((prev) => [...prev, ...parseResults(data.results)])
@@ -471,8 +475,7 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
     try {
       const latlng = latLngParam(latitude, longitude)
       if (latlng == null) return
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latlng}&language=ko&key=${GOOGLE_MAPS_API_KEY}`
-      const res = await fetch(url)
+      const res = await mapsFetch('/geocode/json', { latlng, language: 'ko' })
       const data = await res.json()
       if (id !== geocodeIdRef.current) return
       const result = data?.results?.[0]

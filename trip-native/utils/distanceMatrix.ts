@@ -1,5 +1,5 @@
-import { GOOGLE_MAPS_API_KEY as API_KEY } from '../constants'
 import { latLngParam } from './geo'
+import { mapsFetch } from './mapsApi'
 import type { Place, TravelMode, TravelSegment } from '../types'
 
 const MODE_MAP: Partial<Record<TravelMode, string>> = {
@@ -55,8 +55,12 @@ export async function fetchSegment(
   // (haversine이 NaN을 내서 'NaN분'으로 표시됨) 구간 없음으로 처리한다.
   if (origin == null || destination == null) return null
   try {
-    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin}&destinations=${destination}&mode=${MODE_MAP[mode]}&language=ko&key=${API_KEY}`
-    const res = await fetch(url)
+    const res = await mapsFetch('/distancematrix/json', {
+      origins: origin,
+      destinations: destination,
+      mode: MODE_MAP[mode] ?? '',
+      language: 'ko',
+    })
     const data = await res.json()
     const element = data?.rows?.[0]?.elements?.[0]
     if (element?.status === 'OK') {

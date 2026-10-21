@@ -1,5 +1,5 @@
-import { GOOGLE_MAPS_API_KEY as API_KEY } from '../constants'
 import { latLngParam } from './geo'
+import { mapsFetch } from './mapsApi'
 
 export interface TimeZoneInfo {
   timeZoneId: string
@@ -21,8 +21,10 @@ export async function fetchTimeZone(
   const location = latLngParam(lat, lng)
   if (location == null || !Number.isFinite(timestampSec)) return null
   try {
-    const url = `https://maps.googleapis.com/maps/api/timezone/json?location=${location}&timestamp=${Math.floor(timestampSec)}&key=${API_KEY}`
-    const res = await fetch(url)
+    const res = await mapsFetch('/timezone/json', {
+      location,
+      timestamp: Math.floor(timestampSec),
+    })
     const data = await res.json()
     if (data?.status !== 'OK') return null
     return {
