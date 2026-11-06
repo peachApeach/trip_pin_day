@@ -66,11 +66,14 @@ cd proxy
 전부 통과해야 4단계로 넘어간다. `REQUEST_DENIED`가 나오면
 새 키에서 해당 API를 체크하지 않은 것이다 (반영 지연일 수도 있으니 5분 후 재시도).
 
-## 4단계 — 기존 키를 앱 전용으로 제한
+## 4단계 — 앱용 키에 애플리케이션 제한 걸기
 
 3단계가 통과한 뒤에만 진행한다.
 
-Credentials에서 **기존 키**(`AIzaSyDM0O...`)를 열고:
+> 실제로는 기존 키를 제한하는 대신 **삭제하고 새로 2개를 발급**했다.
+> 앱용 키는 `.env`의 `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`에 들어 있다.
+
+Credentials에서 **앱용 키**를 열고:
 
 1. 이름을 `gurmi-app-mapssdk` 등으로 변경
 2. **API restrictions** → `Restrict key` → 아래만 체크
@@ -86,17 +89,32 @@ Credentials에서 **기존 키**(`AIzaSyDM0O...`)를 열고:
 
 ### SHA-1 확인
 
-EAS가 키스토어를 관리하므로 대시보드에서 본다.
+현재 production 키스토어의 지문 (2026-11 확인):
+
+```
+3E:4C:DA:F1:2F:15:2C:B6:F4:29:9B:F6:BF:E3:B2:A4:04:6A:28:61
+```
+
+EAS 대시보드에서도 볼 수 있다.
 
 https://expo.dev/accounts/peachapeach/projects/trip-native/credentials
 
-Android → Keystore → **SHA-1 Certificate Fingerprint** 값을 복사한다.
+Android → Keystore → **SHA-1 Certificate Fingerprint**.
 
-CLI로도 볼 수 있다 (대화형 메뉴).
+CLI는 대화형 메뉴만 지원한다 (`--non-interactive` 불가).
 
 ```bash
 eas credentials --platform android
 # → production 선택 → Keystore → 정보 출력
+```
+
+빌드된 APK에서 직접 확인하려면 — EAS 빌드는 v2 전용 서명이라
+`keytool -printcert -jarfile`이 동작하지 않는다. APK Signing Block에서
+인증서를 꺼내야 한다.
+
+```bash
+# 빌드 목록에서 Application Archive URL을 받아 다운로드한 뒤
+python3 apk-sha1.py app.apk
 ```
 
 > **Google Play에 올렸다면** Play Console이 앱을 재서명하므로
