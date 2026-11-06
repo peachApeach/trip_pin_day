@@ -449,6 +449,8 @@ export default function App() {
           <View style={[styles.mapWrapper, activeTab !== 'map' && { display: 'none' }]}>
             <MapScreen
               places={places}
+              active={activeTab === 'map'}
+              fitKey={`${activeTrip.id}-${activeDayIndex}`}
               selectedPlaceId={selectedPlaceId}
               focusPlaceId={focusPlaceId}
               allRoutes={allRoutes}
@@ -456,6 +458,7 @@ export default function App() {
               routeStatus={routeStatus}
               onMapPress={handleMapPress}
               onMarkerPress={(id) => { setSelectedPlaceId(id || null); setRouteCoords([]); setRouteStatus('idle') }}
+              onFocusHandled={() => setFocusPlaceId(null)}
               onRemove={handleRemove}
             />
             {places.length === 0 && (

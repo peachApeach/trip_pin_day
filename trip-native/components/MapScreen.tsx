@@ -38,6 +38,9 @@ interface PlaceDetail {
 
 interface Props {
   places: Place[]
+  active: boolean
+  /** 이 값이 바뀌면 전체 경로에 맞춰 카메라를 다시 맞춘다 (여행·Day 전환). */
+  fitKey: string
   selectedPlaceId: number | null
   focusPlaceId: number | null
   allRoutes: { latitude: number; longitude: number }[][]
@@ -46,6 +49,8 @@ interface Props {
   onMapPress: (info: { lat: number; lng: number; name: string; address: string; utcOffsetMinutes?: number; timeZoneId?: string }) => void
   onMarkerPress: (id: number) => void
   onRemove: (id: number) => void
+  /** 한 장소로 이동을 끝냈음을 알린다. 안 비우면 이후 전체 경로 맞추기가 계속 막힌다. */
+  onFocusHandled: () => void
 }
 
 interface SearchResult {
@@ -117,10 +122,29 @@ const act = StyleSheet.create({
   klookBtnText: { fontSize: 12, fontWeight: '700', color: 'white' },
 })
 
-export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRoutes, routeCoords, routeStatus, onMapPress, onMarkerPress, onRemove }: Props) {
+export default function MapScreen({ places, active, fitKey, selectedPlaceId, focusPlaceId, allRoutes, routeCoords, routeStatus, onMapPress, onMarkerPress, onRemove, onFocusHandled }: Props) {
   const mapRef = useRef<MapView>(null)
   const markerPressedRef = useRef(false)
   const geocodeIdRef = useRef(0)
+  const mapReadyRef = useRef(false)
+
+  // 전체 경로가 한 화면에 들어오도록 카메라를 맞춘다. 장소가 하나면 그 지점을 확대한다.
+  const fitToPlaces = (list: Place[]) => {
+    if (!mapReadyRef.current || list.length === 0) return
+    if (list.length === 1) {
+      mapRef.current?.animateToRegion({
+        latitude: list[0].lat,
+        longitude: list[0].lng,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      }, 600)
+      return
+    }
+    mapRef.current?.fitToCoordinates(
+      list.map(p => ({ latitude: p.lat, longitude: p.lng })),
+      { edgePadding: { top: 90, right: 70, bottom: 170, left: 70 }, animated: true }
+    )
+  }
 
   useEffect(() => {
     if (selectedPlaceId) setPreviewMarker(null)
@@ -129,14 +153,26 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   useEffect(() => {
     if (!focusPlaceId) return
     const place = places.find(p => p.id === focusPlaceId)
-    if (!place) return
-    mapRef.current?.animateToRegion({
-      latitude: place.lat,
-      longitude: place.lng,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    }, 500)
+    if (place) {
+      mapRef.current?.animateToRegion({
+        latitude: place.lat,
+        longitude: place.lng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 500)
+    }
+    onFocusHandled()
   }, [focusPlaceId])
+
+  // 지도 탭에 들어올 때와 Day가 바뀔 때, 그 Day의 전체 경로가 한 화면에 들어오게 맞춘다.
+  // 일정 탭에서 지도는 display:none이라 onMapReady 시점엔 places가 비어 있을 수 있고,
+  // 숨은 동안에는 카메라 이동이 반영되지 않으므로 보이는 시점에 다시 맞춰야 한다.
+  // 장소 추가/삭제로는 다시 맞추지 않는다(조작 중 카메라가 튀는 것을 막기 위해).
+  // 단, 특정 장소를 집어서 들어온 경우(onFocusPlace)는 그 쪽을 존중한다.
+  useEffect(() => {
+    if (!active || focusPlaceId) return
+    fitToPlaces(places)
+  }, [active, fitKey])
 
   useEffect(() => {
     if (routeCoords.length < 2) return
@@ -153,13 +189,9 @@ export default function MapScreen({ places, selectedPlaceId, focusPlaceId, allRo
   }, [routeCoords])
 
   const handleMapReady = async () => {
+    mapReadyRef.current = true
     if (places.length > 0) {
-      mapRef.current?.animateToRegion({
-        latitude: places[0].lat,
-        longitude: places[0].lng,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      }, 600)
+      fitToPlaces(places)
       return
     }
     const { status } = await Location.requestForegroundPermissionsAsync()
