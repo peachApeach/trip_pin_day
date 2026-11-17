@@ -127,23 +127,31 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
   const markerPressedRef = useRef(false)
   const geocodeIdRef = useRef(0)
   const mapReadyRef = useRef(false)
+  // 이 fitKey에 대해 자동 맞추기가 아직 유효한지. 사용자가 지도를 조작하면 해제한다.
+  const autoFitKeyRef = useRef<string | null>(null)
 
-  // 전체 경로가 한 화면에 들어오도록 카메라를 맞춘다. 장소가 하나면 그 지점을 확대한다.
-  const fitToPlaces = (list: Place[]) => {
-    if (!mapReadyRef.current || list.length === 0) return
-    if (list.length === 1) {
+  // 전체 경로가 한 화면에 들어오도록 카메라를 맞춘다.
+  // 마커 좌표만 쓰면 경로선이 직선 바깥으로 휠 때(실제 도로/대중교통) 잘리므로
+  // 그려진 경로 좌표까지 범위에 포함한다. 장소가 하나면 그 지점을 확대한다.
+  const fitToAll = () => {
+    if (!mapReadyRef.current) return
+    const coords = [
+      ...places.map(p => ({ latitude: p.lat, longitude: p.lng })),
+      ...allRoutes.flat(),
+    ]
+    if (coords.length === 0) return
+    if (coords.length === 1) {
       mapRef.current?.animateToRegion({
-        latitude: list[0].lat,
-        longitude: list[0].lng,
+        ...coords[0],
         latitudeDelta: 0.02,
         longitudeDelta: 0.02,
       }, 600)
       return
     }
-    mapRef.current?.fitToCoordinates(
-      list.map(p => ({ latitude: p.lat, longitude: p.lng })),
-      { edgePadding: { top: 90, right: 70, bottom: 170, left: 70 }, animated: true }
-    )
+    mapRef.current?.fitToCoordinates(coords, {
+      edgePadding: { top: 90, right: 70, bottom: 170, left: 70 },
+      animated: true,
+    })
   }
 
   useEffect(() => {
@@ -167,12 +175,20 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
   // 지도 탭에 들어올 때와 Day가 바뀔 때, 그 Day의 전체 경로가 한 화면에 들어오게 맞춘다.
   // 일정 탭에서 지도는 display:none이라 onMapReady 시점엔 places가 비어 있을 수 있고,
   // 숨은 동안에는 카메라 이동이 반영되지 않으므로 보이는 시점에 다시 맞춰야 한다.
-  // 장소 추가/삭제로는 다시 맞추지 않는다(조작 중 카메라가 튀는 것을 막기 위해).
-  // 단, 특정 장소를 집어서 들어온 경우(onFocusPlace)는 그 쪽을 존중한다.
   useEffect(() => {
     if (!active || focusPlaceId) return
-    fitToPlaces(places)
+    autoFitKeyRef.current = fitKey
+    fitToAll()
   }, [active, fitKey])
+
+  // 경로선은 비동기로 도착한다. 먼저 맞춘 범위가 경로를 자를 수 있으므로 도착 후 한 번 더
+  // 맞추는데, 그 사이 사용자가 확대하거나 지도를 움직였다면(autoFitKey가 해제됨) 건드리지
+  // 않는다. allRoutes는 장소를 고칠 때마다 새로 오기 때문에 이 가드가 없으면 카메라를 뺏는다.
+  useEffect(() => {
+    if (!active || focusPlaceId) return
+    if (autoFitKeyRef.current !== fitKey) return
+    fitToAll()
+  }, [allRoutes])
 
   useEffect(() => {
     if (routeCoords.length < 2) return
@@ -191,7 +207,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
   const handleMapReady = async () => {
     mapReadyRef.current = true
     if (places.length > 0) {
-      fitToPlaces(places)
+      fitToAll()
       return
     }
     const { status } = await Location.requestForegroundPermissionsAsync()
@@ -526,7 +542,12 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
         onMapReady={handleMapReady}
         onPress={handleMapPress}
         onPoiClick={handlePoiClick}
-        onRegionChangeComplete={(region) => { currentRegionRef.current = region }}
+        onRegionChangeComplete={(region, details) => {
+          currentRegionRef.current = region
+          // 사용자가 직접 움직였으면 경로 도착 후 자동 맞추기로 화면을 뺏지 않는다.
+          // isGesture는 플랫폼에 따라 안 올 수 있어 명시적으로 true일 때만 해제한다.
+          if (details?.isGesture === true) autoFitKeyRef.current = null
+        }}
         showsUserLocation
         showsMyLocationButton
       >
