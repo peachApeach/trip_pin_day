@@ -7,6 +7,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { COLORS, PLACE_COLORS } from '../constants'
 import { CURRENCIES } from '../utils/currency'
 import CurrencyPicker from './CurrencyPicker'
+import Icon, { CloseIcon, type IconName } from './Icon'
 import {
   effectiveOffset, zonedWallClockToUtc, formatTimeInZone as formatTime,
   dayOffsetInZone, dayOffsetLabel, tzLabel, tzShiftLabel,
@@ -49,13 +50,21 @@ const DURATION_OPTIONS = [
 
 const CARD_COLORS = PLACE_COLORS
 
-const TRAVEL_MODES: { key: TravelMode; icon: string; label: string }[] = [
-  { key: 'DRIVING', icon: '🚗', label: '자동차' },
-  { key: 'TRANSIT', icon: '🚇', label: '대중교통' },
-  { key: 'WALKING', icon: '🚶', label: '도보' },
-  { key: 'BICYCLING', icon: '🚴', label: '자전거' },
-  { key: 'OTHER', icon: '✏️', label: '기타' },
+// 아이콘 세트에 자전거가 없다. 그 하나만 이모지로 대체한다.
+const TRAVEL_MODES: { key: TravelMode; icon: IconName | null; emoji?: string; label: string }[] = [
+  { key: 'DRIVING', icon: 'car', label: '자동차' },
+  { key: 'TRANSIT', icon: 'train', label: '대중교통' },
+  { key: 'WALKING', icon: 'walk', label: '도보' },
+  { key: 'BICYCLING', icon: null, emoji: '🚴', label: '자전거' },
+  { key: 'OTHER', icon: 'edit', label: '기타' },
 ]
+
+/** 이동수단 아이콘. 자전거만 아이콘이 없어 이모지로 떨어진다. */
+function ModeIcon({ mode, size = 16, color }: { mode: TravelMode; size?: number; color: string }) {
+  const m = TRAVEL_MODES.find(x => x.key === mode)
+  if (m?.icon) return <Icon name={m.icon} size={size} color={color} />
+  return <Text style={{ fontSize: size }}>{m?.emoji ?? ''}</Text>
+}
 
 function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60000)
@@ -139,8 +148,6 @@ export default function PlanScreen({
     if (date) onStartDateChange(date)
   }
 
-  const travelIcon = TRAVEL_MODES.find(m => m.key === travelMode)?.icon ?? '🚗'
-
   // dragPansRef는 early return 전에 선언해야 hooks 규칙 위반 안 됨
   const dragPansRef = useRef<ReturnType<typeof PanResponder.create>[]>([])
 
@@ -188,7 +195,7 @@ export default function PlanScreen({
   if (places.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyEmoji}>🗺️</Text>
+        <Icon name="map" size={52} color={COLORS.primaryLight} />
         <Text style={styles.emptyTitle}>아직 장소가 없어요</Text>
         <Text style={styles.emptyDesc}>지도를 탭해서 가고 싶은 곳을 추가해보세요</Text>
         <TouchableOpacity style={styles.emptyBtn} onPress={onShowMap}>
@@ -208,7 +215,7 @@ export default function PlanScreen({
           <Text style={styles.sectionLabel}>출발 시간</Text>
           <TouchableOpacity style={styles.timePicker} onPress={() => setPickerMode(true)}>
             <Text style={styles.timePickerText}>{formatTime(startDate)}</Text>
-            <Text style={styles.timePickerIcon}>✏️</Text>
+            <Icon name="edit" size={12} color={COLORS.primary} />
           </TouchableOpacity>
           {firstPlaceOffset != null && (
             <Text style={styles.headerTzLabel}>
@@ -262,7 +269,7 @@ export default function PlanScreen({
                 </View>
                 <Text style={styles.dragName} numberOfLines={1}>{place.name}</Text>
                 <View style={styles.dragHandle} {...dragPansRef.current[placeIdx].panHandlers}>
-                  <Text style={styles.dragHandleIcon}>☰</Text>
+                  <Icon name="more" size={18} color={COLORS.textMuted} />
                 </View>
               </View>
             )
@@ -278,16 +285,16 @@ export default function PlanScreen({
             <View style={styles.timelineRow}>
               <View style={styles.timelineLeft}>
                 <Text style={styles.timeText}>{formatTime(startDate)}</Text>
-                <View style={[styles.timelineDot, { backgroundColor: '#9E9E9E' }]} />
+                <View style={[styles.timelineDot, { backgroundColor: COLORS.textSub }]} />
                 <View style={styles.timelineLine} />
               </View>
-              <View style={[styles.placeCard, { borderLeftColor: '#9E9E9E', opacity: 0.65 }]}>
+              <View style={[styles.placeCard, { borderLeftColor: COLORS.textSub, opacity: 0.65 }]}>
                 <View style={styles.placeCardTop}>
-                  <View style={[styles.indexBadge, { backgroundColor: '#F5F5F5' }]}>
-                    <Text style={[styles.indexText, { color: '#9E9E9E' }]}>전</Text>
+                  <View style={[styles.indexBadge, { backgroundColor: COLORS.surface }]}>
+                    <Text style={[styles.indexText, { color: COLORS.textSub }]}>전</Text>
                   </View>
-                  <Text style={[styles.nameText, { color: '#9E9E9E', flex: 1 }]} numberOfLines={1}>{prevDayLastPlace.name}</Text>
-                  <Text style={{ fontSize: 10, color: '#BDBDBD' }}>전날 도착지</Text>
+                  <Text style={[styles.nameText, { color: COLORS.textSub, flex: 1 }]} numberOfLines={1}>{prevDayLastPlace.name}</Text>
+                  <Text style={{ fontSize: 10, color: COLORS.textMuted }}>전날 도착지</Text>
                 </View>
               </View>
             </View>
@@ -305,7 +312,8 @@ export default function PlanScreen({
               >
                 {prevDayShift && (
                   <View style={styles.tzShiftRow}>
-                    <Text style={styles.tzShiftText}>🕐 {prevDayShift}</Text>
+                    <Icon name="clock" size={12} color={COLORS.tzText} />
+                    <Text style={styles.tzShiftText}>{prevDayShift}</Text>
                     <Text style={styles.tzShiftSub}>전날 도착지 대비</Text>
                   </View>
                 )}
@@ -318,7 +326,7 @@ export default function PlanScreen({
                         style={[styles.segModeBtn, isActive && styles.segModeBtnActive]}
                         onPress={() => onSegmentModeChange(-1, m.key)}
                       >
-                        <Text style={styles.segModeIcon}>{m.icon}</Text>
+                        <ModeIcon mode={m.key} size={16} color={isActive ? COLORS.primary : COLORS.textSub} />
                       </TouchableOpacity>
                     )
                   })}
@@ -332,7 +340,7 @@ export default function PlanScreen({
                           style={styles.customDurInput}
                           keyboardType="number-pad"
                           placeholder="0"
-                          placeholderTextColor="#ccc"
+                          placeholderTextColor={COLORS.textMuted}
                           value={segmentDurations[0] != null ? String(Math.floor(segmentDurations[0] / 60)) : ''}
                           onChangeText={v => {
                             const h = parseInt(v) || 0
@@ -348,7 +356,7 @@ export default function PlanScreen({
                           style={styles.customDurInput}
                           keyboardType="number-pad"
                           placeholder="0"
-                          placeholderTextColor="#ccc"
+                          placeholderTextColor={COLORS.textMuted}
                           value={segmentDurations[0] != null ? String(segmentDurations[0] % 60) : ''}
                           onChangeText={v => {
                             const m = Math.min(59, parseInt(v) || 0)
@@ -415,7 +423,7 @@ export default function PlanScreen({
                 >
                   <View style={styles.placeCardTop}>
                     <View {...dragPansRef.current[index].panHandlers} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                      <Text style={styles.handleIcon}>☰</Text>
+                      <Icon name="more" size={16} color={COLORS.textMuted} style={styles.handleIcon} />
                     </View>
                     <View style={[styles.indexBadge, { backgroundColor: color.bg }]}>
                       <Text style={[styles.indexText, { color: color.dot }]}>{index + 1}</Text>
@@ -427,12 +435,15 @@ export default function PlanScreen({
                       {formatDuration(item.duration)}
                     </Text>
                     <TouchableOpacity onPress={() => onRemove(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Text style={styles.removeText}>✕</Text>
+                      <CloseIcon size={13} />
                     </TouchableOpacity>
                   </View>
 
                   {!!item.address && (
-                    <Text style={styles.address} numberOfLines={1}>📌 {item.address}</Text>
+                    <View style={styles.addressRow}>
+                      <Icon name="pin" size={11} color={COLORS.textMuted} />
+                      <Text style={styles.address} numberOfLines={1}>{item.address}</Text>
+                    </View>
                   )}
 
                   <View style={styles.placeFooter}>
@@ -448,7 +459,7 @@ export default function PlanScreen({
                   {isExpanded && (
                     <>
                       <View style={styles.budgetRow}>
-                        <Text style={styles.budgetLabel}>💰 예상 금액</Text>
+                        <Text style={styles.budgetLabel}>예상 금액</Text>
                         <View style={styles.budgetInputWrap}>
                           <TouchableOpacity style={styles.currencyBtn} onPress={() => setCurrencyPickerId(item.id)}>
                             <Text style={styles.currencyBtnText}>
@@ -460,7 +471,7 @@ export default function PlanScreen({
                             style={styles.budgetInput}
                             keyboardType="number-pad"
                             placeholder="0"
-                            placeholderTextColor="#ccc"
+                            placeholderTextColor={COLORS.textMuted}
                             value={item.budget != null ? String(item.budget) : ''}
                             onChangeText={v => onUpdateBudget(item.id, v ? parseInt(v.replace(/[^0-9]/g, '')) : undefined)}
                           />
@@ -494,7 +505,7 @@ export default function PlanScreen({
                           style={styles.tourBtn}
                           onPress={() => Linking.openURL(getKlookUrl(item.name))}
                         >
-                          <Text style={styles.tourBtnText}>🎫 클룩</Text>
+                          <Text style={styles.tourBtnText}>클룩에서 찾기</Text>
                         </TouchableOpacity>
                       </View>
                     </>
@@ -520,7 +531,8 @@ export default function PlanScreen({
                       const shift = tzShiftLabel(item.offset, schedule[index + 1]?.offset)
                       return shift ? (
                         <View style={styles.tzShiftRow}>
-                          <Text style={styles.tzShiftText}>🕐 {shift}</Text>
+                          <Icon name="clock" size={12} color={COLORS.tzText} />
+                          <Text style={styles.tzShiftText}>{shift}</Text>
                           <Text style={styles.tzShiftSub}>
                             도착지 현지 {formatTime(schedule[index + 1].fromUtc, schedule[index + 1].offset)} 도착
                           </Text>
@@ -537,7 +549,7 @@ export default function PlanScreen({
                             style={[styles.segModeBtn, isActive && styles.segModeBtnActive]}
                             onPress={() => onSegmentModeChange(index, m.key)}
                           >
-                            <Text style={styles.segModeIcon}>{m.icon}</Text>
+                            <ModeIcon mode={m.key} size={16} color={isActive ? COLORS.primary : COLORS.textSub} />
                           </TouchableOpacity>
                         )
                       })}
@@ -552,7 +564,7 @@ export default function PlanScreen({
                               style={styles.customDurInput}
                               keyboardType="number-pad"
                               placeholder="0"
-                              placeholderTextColor="#ccc"
+                              placeholderTextColor={COLORS.textMuted}
                               value={segmentDurations[segOffset + index] != null ? String(Math.floor((segmentDurations[segOffset + index] as number) / 60)) : ''}
                               onChangeText={v => {
                                 const h = parseInt(v) || 0
@@ -569,7 +581,7 @@ export default function PlanScreen({
                               style={styles.customDurInput}
                               keyboardType="number-pad"
                               placeholder="0"
-                              placeholderTextColor="#ccc"
+                              placeholderTextColor={COLORS.textMuted}
                               value={segmentDurations[segOffset + index] != null ? String((segmentDurations[segOffset + index] as number) % 60) : ''}
                               onChangeText={v => {
                                 const m = Math.min(59, parseInt(v) || 0)
@@ -627,7 +639,7 @@ export default function PlanScreen({
           })
           return (
             <View style={styles.budgetSummary}>
-              <Text style={styles.budgetSummaryLabel}>💰 이번 일정 예산</Text>
+              <Text style={styles.budgetSummaryLabel}>이번 일정 예산</Text>
               <View style={styles.budgetSummaryAmounts}>
                 {Object.entries(grouped).map(([code, total]) => {
                   const sym = CURRENCIES.find(c => c.code === code)?.symbol ?? code
@@ -651,10 +663,10 @@ export default function PlanScreen({
                 {dayOffsetLabel(dayOffsetInZone(dayBaseUtc, endTimeUtc, firstPlaceOffset, lastPlaceOffset))}
               </Text>
             )}
-            <View style={[styles.timelineDot, { backgroundColor: '#43A047' }]} />
+            <View style={[styles.timelineDot, { backgroundColor: COLORS.mint }]} />
           </View>
           <View style={styles.endCard}>
-            <Text style={styles.endCardText}>🏁  여행 종료</Text>
+            <Text style={styles.endCardText}>여행 종료</Text>
             <Text style={styles.endCardSub}>
               {formatTime(dayBaseUtc, firstPlaceOffset)} ~ {formatTime(endTimeUtc, lastPlaceOffset)}
             </Text>
@@ -668,16 +680,15 @@ export default function PlanScreen({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg, position: 'relative' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 8 },
-  emptyEmoji: { fontSize: 48, marginBottom: 4 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   emptyDesc: { fontSize: 13, color: COLORS.textSub, textAlign: 'center', lineHeight: 20 },
   emptyBtn: { marginTop: 12, backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
   emptyBtnText: { color: 'white', fontWeight: '700', fontSize: 14 },
 
   header: {
-    backgroundColor: 'white', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, gap: 10,
+    backgroundColor: COLORS.card, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, gap: 10,
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
   },
   headerSection: { gap: 4 },
   sectionLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub, textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -687,7 +698,7 @@ const styles = StyleSheet.create({
   dateBtn: { flex: 1, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7 },
   dateBtnFilled: { borderColor: COLORS.mint, backgroundColor: COLORS.mintLight },
   dateBtnLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSub, marginBottom: 2 },
-  dateBtnValue: { fontSize: 13, fontWeight: '600', color: '#bbb' },
+  dateBtnValue: { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
   dateBtnValueFilled: { color: COLORS.mint },
   dateSep: { fontSize: 16, color: COLORS.textSub },
   nightsBadge: { backgroundColor: COLORS.primaryLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
@@ -698,13 +709,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16,
   },
   timePickerText: { fontSize: 17, fontWeight: '800', color: COLORS.primary },
-  timePickerIcon: { fontSize: 11 },
   modeScroll: { flex: 1 },
   modeRow: { flexDirection: 'row', gap: 6 },
   modeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
-    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: '#FAFAFA',
+    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.surface,
   },
   modeBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
   modeIcon: { fontSize: 13 },
@@ -712,7 +722,7 @@ const styles = StyleSheet.create({
   modeLabelActive: { color: COLORS.primary },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   loadingText: { fontSize: 12, color: COLORS.textSub },
-  handleIcon: { fontSize: 16, color: '#C0C0C0', paddingHorizontal: 4 },
+  handleIcon: { marginHorizontal: 4 },
 
   dragList: {
     position: 'absolute', top: 70, left: 0, right: 0,
@@ -722,8 +732,8 @@ const styles = StyleSheet.create({
     position: 'absolute', left: 16, right: 16,
     height: 64,
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: 'white', borderRadius: 14, paddingHorizontal: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    backgroundColor: COLORS.card, borderRadius: 14, paddingHorizontal: 12,
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
   },
   dragItemActive: {
@@ -735,7 +745,6 @@ const styles = StyleSheet.create({
   dragBadgeText: { fontSize: 12, fontWeight: '800' },
   dragName: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text },
   dragHandle: { padding: 10 },
-  dragHandleIcon: { fontSize: 18, color: '#BDBDBD' },
   pickerDone: { alignSelf: 'flex-end', backgroundColor: COLORS.mint, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 10 },
   pickerDoneText: { color: 'white', fontSize: 13, fontWeight: '700' },
 
@@ -757,21 +766,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.yellowLight, borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 5, marginBottom: 6,
   },
-  tzShiftText: { fontSize: 11, fontWeight: '700', color: '#8D6E00' },
-  tzShiftSub: { fontSize: 10, color: '#A98A2E' },
+  tzShiftText: { fontSize: 11, fontWeight: '700', color: COLORS.tzText },
+  tzShiftSub: { fontSize: 10, color: COLORS.tzText, opacity: 0.8 },
   headerTzLabel: { fontSize: 10, color: COLORS.textSub, fontWeight: '600' },
   travelTimeText: { fontSize: 11, color: COLORS.textSub, marginBottom: 4 },
   timelineDot: {
     width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: 'white',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 2, elevation: 2,
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 2, elevation: 2,
   },
-  travelDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D0D0D0' },
-  timelineLine: { width: 2, flex: 1, backgroundColor: '#EBEBEB', minHeight: 20 },
+  travelDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.textMuted },
+  timelineLine: { width: 2, flex: 1, backgroundColor: COLORS.border, minHeight: 20 },
 
   placeCard: {
-    flex: 1, backgroundColor: 'white', borderRadius: 16, padding: 12, marginBottom: 8,
+    flex: 1, backgroundColor: COLORS.card, borderRadius: 16, padding: 12, marginBottom: 8,
     borderLeftWidth: 4, gap: 6,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
   placeCardExpanded: { shadowOpacity: 0.12, elevation: 5 },
   placeCardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -780,8 +789,8 @@ const styles = StyleSheet.create({
   nameBtn: { flex: 1 },
   nameText: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   durationChip: { fontSize: 11, fontWeight: '700' },
-  removeText: { fontSize: 13, color: '#D0D0D0' },
-  address: { fontSize: 11, color: COLORS.textSub },
+  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  address: { flex: 1, fontSize: 11, color: COLORS.textSub },
   placeFooter: { flexDirection: 'row', alignItems: 'center' },
   placeTime: { fontSize: 11, color: COLORS.textSub, fontWeight: '500' },
 
@@ -789,7 +798,7 @@ const styles = StyleSheet.create({
   tourLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
   tourBtn: {
     alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16,
-    borderRadius: 12, backgroundColor: '#FF6B35', alignItems: 'center',
+    borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center',
   },
   tourBtnText: { fontSize: 12, fontWeight: '700', color: 'white' },
 
@@ -798,25 +807,24 @@ const styles = StyleSheet.create({
   durationButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   durationBtn: {
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
-    borderWidth: 1.5, borderColor: '#EBEBEB', backgroundColor: '#FAFAFA',
+    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.surface,
   },
   durationBtnText: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
   durationBtnTextActive: { color: 'white' },
 
   travelCard: {
     flex: 1, gap: 8,
-    backgroundColor: '#FAFAFA', borderRadius: 12,
+    backgroundColor: COLORS.surface, borderRadius: 12,
     paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8,
-    borderWidth: 1, borderColor: '#EBEBEB', borderStyle: 'dashed',
+    borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed',
   },
   segModeRow: { flexDirection: 'row', gap: 6 },
   segModeBtn: {
     width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'white', borderWidth: 1.5, borderColor: '#E0E0E0',
+    backgroundColor: COLORS.card, borderWidth: 1.5, borderColor: COLORS.border,
     justifyContent: 'center', alignItems: 'center',
   },
   segModeBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
-  segModeIcon: { fontSize: 16 },
   customDurRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   customDurLabel: { fontSize: 12, color: COLORS.textSub, fontWeight: '500' },
   customDurFields: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -828,10 +836,9 @@ const styles = StyleSheet.create({
   },
   customDurUnit: { fontSize: 12, fontWeight: '600', color: COLORS.textSub },
   segInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  segInfoEmpty: { fontSize: 11, color: '#BDBDBD' },
-  travelIcon: { fontSize: 14 },
+  segInfoEmpty: { fontSize: 11, color: COLORS.textMuted },
   travelDuration: { fontSize: 12, fontWeight: '700', color: COLORS.textSub },
-  travelDistance: { fontSize: 11, color: '#BDBDBD' },
+  travelDistance: { fontSize: 11, color: COLORS.textMuted },
   routeHint: { fontSize: 10, color: COLORS.primary, marginLeft: 'auto', fontWeight: '600' },
 
   budgetRow: {
@@ -859,19 +866,19 @@ const styles = StyleSheet.create({
   budgetSummary: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 8,
-    backgroundColor: '#FFF8E1',
+    backgroundColor: COLORS.yellowLight,
     borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
-    borderWidth: 1, borderColor: '#FFE082',
+    borderWidth: 1, borderColor: COLORS.yellow,
   },
-  budgetSummaryLabel: { fontSize: 13, fontWeight: '600', color: '#795548' },
+  budgetSummaryLabel: { fontSize: 13, fontWeight: '600', color: COLORS.tzText },
   budgetSummaryAmounts: { alignItems: 'flex-end', gap: 2 },
-  budgetSummaryAmount: { fontSize: 16, fontWeight: '800', color: '#E65100' },
+  budgetSummaryAmount: { fontSize: 16, fontWeight: '800', color: COLORS.text },
 
   endCard: {
-    flex: 1, backgroundColor: '#E8F5E9', borderRadius: 16,
+    flex: 1, backgroundColor: COLORS.mintLight, borderRadius: 16,
     paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8,
-    borderWidth: 1, borderColor: '#C8E6C9', gap: 2,
+    borderWidth: 1, borderColor: COLORS.mint, gap: 2,
   },
-  endCardText: { fontSize: 14, fontWeight: '700', color: '#2E7D32' },
-  endCardSub: { fontSize: 11, color: '#66BB6A' },
+  endCardText: { fontSize: 14, fontWeight: '700', color: COLORS.mintDark },
+  endCardSub: { fontSize: 11, color: COLORS.mintDark },
 })

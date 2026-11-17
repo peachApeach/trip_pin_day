@@ -42,7 +42,8 @@ module.exports = {
       [
         'expo-notifications',
         {
-          color: '#FF6B8A',
+          // 안드로이드 알림 강조색 — 시안 메인 포인트(Soft Coral Pink)
+          color: '#FF708D',
         },
       ],
       [

@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
 import { COLORS } from '../constants'
+import Icon, { type IconName } from './Icon'
 import type { Place, TravelMode, TravelSegment } from '../types'
 
 interface ScheduledPlace extends Place {
@@ -56,14 +57,21 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h}시간 ${m}분` : `${h}시간`
 }
 
-const TRAVEL_MODES: { key: TravelMode; icon: string; label: string }[] = [
-  { key: 'DRIVING', icon: '🚗', label: '자동차' },
-  { key: 'TRANSIT', icon: '🚇', label: '대중교통' },
-  { key: 'WALKING', icon: '🚶', label: '도보' },
-  { key: 'BICYCLING', icon: '🚴', label: '자전거' },
+// 아이콘 세트에 자전거가 없어 그 하나만 이모지로 둔다.
+const TRAVEL_MODES: { key: TravelMode; icon: IconName | null; emoji?: string; label: string }[] = [
+  { key: 'DRIVING', icon: 'car', label: '자동차' },
+  { key: 'TRANSIT', icon: 'train', label: '대중교통' },
+  { key: 'WALKING', icon: 'walk', label: '도보' },
+  { key: 'BICYCLING', icon: null, emoji: '🚴', label: '자전거' },
 ]
 
-const CARD_COLORS = [COLORS.primary, COLORS.mint, '#FFB300', '#7C4DFF', '#43A047']
+function ModeIcon({ mode, size = 14, color }: { mode: TravelMode; size?: number; color: string }) {
+  const m = TRAVEL_MODES.find(x => x.key === mode)
+  if (m?.icon) return <Icon name={m.icon} size={size} color={color} />
+  return <Text style={{ fontSize: size }}>{m?.emoji ?? ''}</Text>
+}
+
+const CARD_COLORS = [COLORS.primary, COLORS.mint, COLORS.yellow, '#7C4DFF', '#43A047']
 
 type PickerMode = 'time' | 'tripStart' | 'tripEnd' | null
 
@@ -153,7 +161,7 @@ export default function Timetable({
             <Text style={styles.sectionLabel}>출발 시간</Text>
             <TouchableOpacity style={styles.timePicker} onPress={() => setPickerMode('time')}>
               <Text style={styles.timePickerText}>{formatTime(startDate)}</Text>
-              <Text style={styles.timePickerIcon}>✏️</Text>
+              <Icon name="edit" size={12} color={COLORS.primary} />
             </TouchableOpacity>
           </View>
           {places.length > 0 && (
@@ -190,7 +198,7 @@ export default function Timetable({
                 style={[styles.modeBtn, travelMode === mode.key && styles.modeBtnActive]}
                 onPress={() => onTravelModeChange(mode.key)}
               >
-                <Text style={styles.modeIcon}>{mode.icon}</Text>
+                <ModeIcon mode={mode.key} color={travelMode === mode.key ? COLORS.primary : COLORS.textSub} />
                 <Text style={[styles.modeLabel, travelMode === mode.key && styles.modeLabelActive]}>
                   {mode.label}
                 </Text>
@@ -209,7 +217,7 @@ export default function Timetable({
 
       {places.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>🕐</Text>
+          <Icon name="clock" size={48} color={COLORS.primaryLight} />
           <Text style={styles.emptyTitle}>아직 일정이 없어요</Text>
           <Text style={styles.emptyDesc}>장소 탭에서 장소를 추가하면{'\n'}자동으로 일정이 만들어져요</Text>
         </View>
@@ -217,7 +225,6 @@ export default function Timetable({
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
           {schedule.map((item, index) => {
             const dotColor = CARD_COLORS[index % CARD_COLORS.length]
-            const travelIcon = TRAVEL_MODES.find((m) => m.key === travelMode)?.icon ?? '🚗'
             return (
               <View key={item.id}>
                 <View style={styles.timelineRow}>
@@ -253,7 +260,7 @@ export default function Timetable({
                       <View style={styles.timelineLine} />
                     </View>
                     <View style={styles.travelCard}>
-                      <Text style={styles.travelCardIcon}>{travelIcon}</Text>
+                      <ModeIcon mode={travelMode} color={COLORS.textSub} />
                       <Text style={styles.travelCardDuration}>이동 {formatDuration(item.travelTo.duration)}</Text>
                       <Text style={styles.travelCardDistance}>{item.travelTo.distance}</Text>
                     </View>
@@ -266,10 +273,10 @@ export default function Timetable({
           <View style={styles.timelineRow}>
             <View style={styles.timelineLeft}>
               <Text style={styles.timeText}>{formatTime(endTime)}</Text>
-              <View style={[styles.timelineDot, { backgroundColor: '#43A047' }]} />
+              <View style={[styles.timelineDot, { backgroundColor: COLORS.mint }]} />
             </View>
             <View style={styles.endCard}>
-              <Text style={styles.endCardText}>🏁  여행 종료</Text>
+              <Text style={styles.endCardText}>여행 종료</Text>
               <Text style={styles.endCardSub}>{formatTime(startDate)} ~ {formatTime(endTime)}</Text>
             </View>
           </View>
@@ -282,10 +289,10 @@ export default function Timetable({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
-    backgroundColor: 'white',
+    backgroundColor: COLORS.card,
     paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12, gap: 12,
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
   },
   sectionLabel: {
@@ -300,7 +307,7 @@ const styles = StyleSheet.create({
   },
   tripDateBtnFilled: { borderColor: COLORS.mint, backgroundColor: COLORS.mintLight },
   tripDateBtnLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSub, marginBottom: 2 },
-  tripDateBtnValue: { fontSize: 13, fontWeight: '600', color: '#bbb' },
+  tripDateBtnValue: { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
   tripDateBtnValueFilled: { color: COLORS.mint },
   dateSep: { fontSize: 16, color: COLORS.textSub },
   nightsBadge: { backgroundColor: COLORS.primaryLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
@@ -318,7 +325,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
   },
   timePickerText: { fontSize: 18, fontWeight: '800', color: COLORS.primary, letterSpacing: -0.5 },
-  timePickerIcon: { fontSize: 12 },
   summaryBlock: {
     alignItems: 'center', backgroundColor: COLORS.mintLight,
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16,
@@ -329,17 +335,15 @@ const styles = StyleSheet.create({
   modeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: '#FAFAFA',
+    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.surface,
   },
   modeBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
-  modeIcon: { fontSize: 14 },
   modeLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSub },
   modeLabelActive: { color: COLORS.primary },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   loadingText: { fontSize: 12, color: COLORS.textSub },
 
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8, padding: 32 },
-  emptyEmoji: { fontSize: 48 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   emptyDesc: { fontSize: 13, color: COLORS.textSub, textAlign: 'center', lineHeight: 20 },
   list: { padding: 16, paddingBottom: 40 },
@@ -350,15 +354,15 @@ const styles = StyleSheet.create({
   timelineDot: {
     width: 12, height: 12, borderRadius: 6,
     borderWidth: 2, borderColor: 'white',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.15, shadowRadius: 2, elevation: 2,
   },
-  travelDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D0D0D0' },
-  timelineLine: { width: 2, flex: 1, backgroundColor: '#EBEBEB', minHeight: 20 },
+  travelDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.textMuted },
+  timelineLine: { width: 2, flex: 1, backgroundColor: COLORS.border, minHeight: 20 },
   placeCard: {
-    flex: 1, backgroundColor: 'white', borderRadius: 16,
+    flex: 1, backgroundColor: COLORS.card, borderRadius: 16,
     padding: 14, marginBottom: 8, borderLeftWidth: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 2, gap: 6,
   },
   placeCardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -372,18 +376,17 @@ const styles = StyleSheet.create({
   durationTagText: { fontSize: 11, fontWeight: '700' },
   travelCard: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#FAFAFA', borderRadius: 12,
+    backgroundColor: COLORS.surface, borderRadius: 12,
     paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8,
-    borderWidth: 1, borderColor: '#EBEBEB', borderStyle: 'dashed',
+    borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed',
   },
-  travelCardIcon: { fontSize: 14 },
   travelCardDuration: { fontSize: 12, fontWeight: '700', color: COLORS.textSub },
-  travelCardDistance: { fontSize: 11, color: '#BDBDBD', marginLeft: 'auto' },
+  travelCardDistance: { fontSize: 11, color: COLORS.textMuted, marginLeft: 'auto' },
   endCard: {
-    flex: 1, backgroundColor: '#E8F5E9', borderRadius: 16,
+    flex: 1, backgroundColor: COLORS.mintLight, borderRadius: 16,
     paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8,
-    borderWidth: 1, borderColor: '#C8E6C9', gap: 2,
+    borderWidth: 1, borderColor: COLORS.mint, gap: 2,
   },
-  endCardText: { fontSize: 14, fontWeight: '700', color: '#2E7D32' },
-  endCardSub: { fontSize: 11, color: '#66BB6A' },
+  endCardText: { fontSize: 14, fontWeight: '700', color: COLORS.mintDark },
+  endCardSub: { fontSize: 11, color: COLORS.mintDark },
 })

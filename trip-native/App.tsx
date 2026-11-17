@@ -9,6 +9,7 @@ import MapScreen from './components/MapScreen'
 import PlanScreen from './components/PlanScreen'
 import TripListScreen from './components/TripListScreen'
 import TripOverviewScreen from './components/TripOverviewScreen'
+import Icon, { type IconName } from './components/Icon'
 import { fetchTravelSegments, fetchSegment } from './utils/distanceMatrix'
 import { fetchRoute, fetchAllRoutes } from './utils/directions'
 import { fetchTimeZone, type TimeZoneInfo } from './utils/timezone'
@@ -564,8 +565,8 @@ export default function App() {
   }
 
   const TABS = [
-    { key: 'plan' as TabKey, icon: '📋', label: `일정 (${places.length})` },
-    { key: 'map' as TabKey, icon: '🗺️', label: '지도' },
+    { key: 'plan' as TabKey, icon: 'calendar' as IconName, label: `일정 (${places.length})` },
+    { key: 'map' as TabKey, icon: 'map' as IconName, label: '지도' },
   ]
 
   return (
@@ -621,7 +622,8 @@ export default function App() {
             />
             {places.length === 0 && (
               <View style={styles.mapHint}>
-                <Text style={styles.mapHintText}>✨ 지도를 탭해서 장소를 추가해요</Text>
+                <Icon name="pin" size={14} color={COLORS.primary} />
+                <Text style={styles.mapHintText}>지도를 탭해서 장소를 추가해요</Text>
               </View>
             )}
           </View>
@@ -668,7 +670,11 @@ export default function App() {
               onPress={() => setActiveTab(tab.key)}
               activeOpacity={0.7}
             >
-              <Text style={styles.tabIcon}>{tab.icon}</Text>
+              <Icon
+                name={tab.icon}
+                size={22}
+                color={activeTab === tab.key ? COLORS.primary : COLORS.textSub}
+              />
               <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
                 {tab.label}
               </Text>
@@ -750,21 +756,21 @@ const styles = StyleSheet.create({
   },
   mapHint: {
     position: 'absolute', bottom: 16, alignSelf: 'center',
-    backgroundColor: 'white',
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.card,
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1, shadowRadius: 8, elevation: 4,
   },
   mapHintText: { fontSize: 13, color: COLORS.textSub, fontWeight: '500' },
   tabBar: {
-    flexDirection: 'row', backgroundColor: 'white',
+    flexDirection: 'row', backgroundColor: COLORS.card,
     paddingBottom: Platform.OS === 'ios' ? 8 : 4, paddingTop: 8,
     borderTopWidth: 1, borderTopColor: COLORS.border,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 8,
   },
   tabItem: { flex: 1, alignItems: 'center', paddingVertical: 4, gap: 2 },
-  tabIcon: { fontSize: 22 },
   tabLabel: { fontSize: 11, color: COLORS.textSub, fontWeight: '500' },
   tabLabelActive: { color: COLORS.primary, fontWeight: '700' },
   tabDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: COLORS.primary, marginTop: 1 },

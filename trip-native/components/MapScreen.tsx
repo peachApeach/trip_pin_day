@@ -3,9 +3,11 @@ import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, Keyboard, FlatList, ScrollView, Linking, Dimensions, Image,
 } from 'react-native'
-import MapView, { Marker, Polyline, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
+import MapView, { Polyline, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { COLORS, PLACE_COLORS } from '../constants'
+import Icon, { CloseIcon } from './Icon'
+import MapPin, { categoryOf } from './MapPin'
 import { latLngParam } from '../utils/geo'
 import { mapsFetch, mapsImageSource } from '../utils/mapsApi'
 import { fetchTimeZone } from '../utils/timezone'
@@ -58,6 +60,8 @@ interface SearchResult {
   address: string
   lat: number
   lng: number
+  /** Places가 돌려주는 분류. 핀 색을 고르는 데만 쓴다. */
+  types?: string[]
 }
 
 const INITIAL_REGION: Region = {
@@ -77,7 +81,7 @@ const act = StyleSheet.create({
     paddingVertical: 14, paddingHorizontal: 9,
     borderTopLeftRadius: 12, borderBottomLeftRadius: 12,
     alignItems: 'center', gap: 4,
-    shadowColor: '#000', shadowOffset: { width: -2, height: 0 },
+    shadowColor: COLORS.text, shadowOffset: { width: -2, height: 0 },
     shadowOpacity: 0.15, shadowRadius: 6, elevation: 6,
   },
   tabIcon: { fontSize: 16, color: 'white', fontWeight: '800' },
@@ -86,8 +90,8 @@ const act = StyleSheet.create({
     position: 'absolute',
     top: 0, bottom: 0,
     width: '72%',
-    backgroundColor: 'white',
-    shadowColor: '#000', shadowOffset: { width: -3, height: 0 },
+    backgroundColor: COLORS.card,
+    shadowColor: COLORS.text, shadowOffset: { width: -3, height: 0 },
     shadowOpacity: 0.15, shadowRadius: 10, elevation: 12,
     zIndex: 9,
   },
@@ -96,42 +100,42 @@ const act = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
     paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10,
-    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   title: { fontSize: 15, fontWeight: '800', color: COLORS.text },
   subtitle: { fontSize: 10, color: COLORS.textSub, marginTop: 2 },
   closeBtn: { padding: 4 },
-  closeText: { fontSize: 15, color: '#ccc' },
   loading: { alignItems: 'center', paddingVertical: 40, gap: 12 },
   loadingText: { fontSize: 12, color: COLORS.textSub },
   list: { padding: 10, gap: 10, paddingBottom: 40 },
   card: {
-    backgroundColor: '#FAFAFA', borderRadius: 14, padding: 12,
-    borderWidth: 1, borderColor: '#F0F0F0', gap: 6,
+    backgroundColor: COLORS.surface, borderRadius: 14, padding: 12,
+    borderWidth: 1, borderColor: COLORS.border, gap: 6,
   },
   // 사진 + 글을 좌우로 — 사진이 없는 카드와 높이가 비슷하게 유지된다
   cardRow: { flexDirection: 'row', gap: 10 },
   cardTexts: { flex: 1, gap: 4 },
   thumb: {
     width: 68, height: 68, borderRadius: 10,
-    backgroundColor: '#ECECEC',
+    backgroundColor: COLORS.border,
   },
   // 사진이 없거나 못 불러왔을 때 자리만 지킨다 (레이아웃이 흔들리지 않게)
   thumbFallback: {
     width: 68, height: 68, borderRadius: 10,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: COLORS.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  thumbFallbackText: { fontSize: 22, opacity: 0.35 },
   cardName: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  cardAddr: { fontSize: 10, color: COLORS.textSub },
+  addrRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  cardAddr: { flex: 1, fontSize: 10, color: COLORS.textSub },
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  metaRating: { fontSize: 11, fontWeight: '700', color: '#FFA000' },
+  metaRating: { fontSize: 11, fontWeight: '700', color: COLORS.rating },
   metaCount: { fontSize: 10, color: COLORS.textSub },
-  metaPrice: { fontSize: 11, fontWeight: '600', color: '#43A047' },
+  metaPrice: { fontSize: 11, fontWeight: '600', color: COLORS.mint },
   klookBtn: {
     marginTop: 6, paddingVertical: 9, borderRadius: 10,
-    backgroundColor: '#FF6B35', alignItems: 'center',
+    backgroundColor: COLORS.primary, alignItems: 'center',
   },
   klookBtnText: { fontSize: 12, fontWeight: '700', color: 'white' },
 })
@@ -330,12 +334,15 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
             />
           ) : (
             <View style={act.thumbFallback}>
-              <Text style={act.thumbFallbackText}>🏞️</Text>
+              <Icon name="pin" size={24} color={COLORS.textMuted} />
             </View>
           )}
           <View style={act.cardTexts}>
             <Text style={act.cardName} numberOfLines={2}>{item.name}</Text>
-            <Text style={act.cardAddr} numberOfLines={2}>📌 {item.address}</Text>
+            <View style={act.addrRow}>
+              <Icon name="pin" size={10} color={COLORS.textMuted} />
+              <Text style={act.cardAddr} numberOfLines={2}>{item.address}</Text>
+            </View>
             <View style={act.cardMeta}>
               {stars && <Text style={act.metaRating}>{stars}</Text>}
               {item.userRatingsTotal != null && (
@@ -346,7 +353,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
           </View>
         </View>
         <TouchableOpacity style={act.klookBtn} onPress={(e) => { e.stopPropagation(); Linking.openURL(klookUrl) }}>
-          <Text style={act.klookBtnText}>🎫 클룩에서 예약하기</Text>
+          <Text style={act.klookBtnText}>클룩에서 예약하기</Text>
         </TouchableOpacity>
       </TouchableOpacity>
     )
@@ -374,7 +381,8 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
 
   const fetchPlaceDetail = async (placeId: string): Promise<SearchResult | null> => {
     try {
-      const fields = 'name,geometry,formatted_address,rating,user_ratings_total,price_level,opening_hours,formatted_phone_number'
+      // types는 핀 색을 카테고리별로 고르기 위해 받는다 (Basic Data라 과금 변화 없음)
+      const fields = 'name,geometry,formatted_address,types,rating,user_ratings_total,price_level,opening_hours,formatted_phone_number'
       const res = await mapsFetch('/place/details/json', {
         place_id: placeId, fields, language: 'ko',
       })
@@ -405,6 +413,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
         address: r.formatted_address ?? '',
         lat: r.geometry.location.lat,
         lng: r.geometry.location.lng,
+        types: r.types ?? [],
       }
     } catch { return null }
   }
@@ -464,6 +473,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
       address: r.formatted_address ?? '',
       lat: r.geometry.location.lat,
       lng: r.geometry.location.lng,
+      types: r.types ?? [],
     }))
 
   const handleSearch = async () => {
@@ -540,7 +550,11 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
     setDetailLoading(true)
     setPlaceDetail(null)
     if (placeId) {
-      fetchPlaceDetail(placeId).then(() => setDetailLoading(false))
+      fetchPlaceDetail(placeId).then((detail) => {
+        setDetailLoading(false)
+        // 좌표는 탭한 자리를 그대로 두고 카테고리(핀 색)만 채운다
+        if (detail?.types) setPreviewMarker((prev) => prev && { ...prev, types: detail.types })
+      })
     } else {
       fetchDetailByLatLng(coordinate.latitude, coordinate.longitude, name).then(() => setDetailLoading(false))
     }
@@ -604,74 +618,46 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
           />
         )}
 
+        {/* 검색·추천으로 찍어본 장소. 일정 순서가 없으니 카테고리 핀으로 보여준다. */}
         {previewMarker && !selectedPlaceId && (
-          <Marker
+          <MapPin
             coordinate={{ latitude: previewMarker.lat, longitude: previewMarker.lng }}
-            pinColor={COLORS.mint}
+            category={categoryOf(previewMarker.types)}
+            selected
+            zIndex={2}
           />
         )}
 
+        {/* places는 Day별로 걸러져 들어오므로 index + 1이 그 날의 방문 순서다 */}
         {places.map((place, index) => {
-          const dotColor = PLACE_COLORS[index % PLACE_COLORS.length].dot
           const isSelected = selectedPlaceId === place.id
           return (
-          <Marker
-            key={`${place.id}-${isSelected}`}
-            coordinate={{ latitude: place.lat, longitude: place.lng }}
-            tracksViewChanges={true}
-            anchor={isSelected ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 1 }}
-            onPress={() => {
-              markerPressedRef.current = true
-              setTimeout(() => { markerPressedRef.current = false }, 300)
-              geocodeIdRef.current++
-              onMarkerPress(place.id)
-              setPreviewMarker(null)
-            }}
-          >
-            {isSelected ? (
-              // 뱃지 — 바깥 사각형 래퍼, borderRadius 없음
-              <View collapsable={false} style={{ padding: 4 }}>
-                <View collapsable={false} style={{
-                  paddingHorizontal: 8, paddingVertical: 4,
-                  backgroundColor: 'white',
-                  borderRadius: 10,
-                  borderWidth: 2,
-                  borderColor: dotColor,
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Text style={{ color: dotColor, fontSize: 12, fontWeight: '800' }}>{index + 1}</Text>
-                </View>
-              </View>
-            ) : (
-              // 핀 — 원 + 삼각형, borderRadius 없는 column
-              <View collapsable={false} style={{ alignItems: 'center' }}>
-                <View collapsable={false} style={{
-                  width: 30, height: 30, borderRadius: 15,
-                  backgroundColor: dotColor,
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Text style={{ color: 'white', fontSize: 12, fontWeight: '800' }}>{index + 1}</Text>
-                </View>
-                <View style={{
-                  width: 0, height: 0,
-                  borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10,
-                  borderLeftColor: 'transparent', borderRightColor: 'transparent',
-                  borderTopColor: dotColor,
-                }} />
-              </View>
-            )}
-          </Marker>
-        )})}
+            <MapPin
+              key={place.id}
+              coordinate={{ latitude: place.lat, longitude: place.lng }}
+              order={index + 1}
+              selected={isSelected}
+              zIndex={isSelected ? 3 : 1}
+              onPress={() => {
+                markerPressedRef.current = true
+                setTimeout(() => { markerPressedRef.current = false }, 300)
+                geocodeIdRef.current++
+                onMarkerPress(place.id)
+                setPreviewMarker(null)
+              }}
+            />
+          )
+        })}
       </MapView>
 
       {/* 검색창 */}
       <View style={styles.searchWrapper}>
         <View style={[styles.searchBox, !!errorMsg && styles.searchBoxError]}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Icon name="pin" size={15} color={COLORS.textMuted} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="장소 검색"
-            placeholderTextColor="#bbb"
+            placeholderTextColor={COLORS.textMuted}
             value={query}
             onChangeText={handleQueryChange}
             returnKeyType="search"
@@ -681,7 +667,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
             ? <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 4 }} />
             : !!query && (
               <TouchableOpacity onPress={() => { setQuery(''); setErrorMsg(''); setSuggestions([]); setShowSuggestions(false) }} style={styles.clearBtn}>
-                <Text style={styles.clearText}>✕</Text>
+                <CloseIcon size={13} />
               </TouchableOpacity>
             )
           }
@@ -699,7 +685,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
                 onPress={() => handleSuggestionSelect(item)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.suggestionIcon}>📍</Text>
+                <Icon name="pin" size={13} color={COLORS.textMuted} />
                 <Text style={styles.suggestionText} numberOfLines={1}>{item.description}</Text>
               </TouchableOpacity>
             ))}
@@ -733,8 +719,8 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
             accentColor={dotColor}
             detail={null}
             detailLoading={false}
-            actionLabel="🗑 삭제"
-            actionColor="#FF5252"
+            actionLabel="삭제"
+            actionColor={COLORS.danger}
             onAction={() => { onRemove(place.id); onMarkerPress(0) }}
             onClose={() => onMarkerPress(0)}
           />
@@ -782,7 +768,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
             <View style={styles.resultsTitleRow}>
               <Text style={styles.modalTitle}>검색 결과</Text>
               <TouchableOpacity onPress={() => setShowModal(false)} style={styles.resultsDismiss}>
-                <Text style={styles.resultsDismissText}>✕</Text>
+                <CloseIcon size={16} />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -810,7 +796,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
                   activeOpacity={0.7}
                 >
                   <View style={styles.resultIcon}>
-                    <Text style={styles.resultIconText}>📍</Text>
+                    <Icon name="pin" size={16} color={COLORS.primary} />
                   </View>
                   <View style={styles.resultTexts}>
                     <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
@@ -834,11 +820,14 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
 
         <View style={act.header}>
           <View>
-            <Text style={act.title}>📍 근처 즐길거리</Text>
+            <View style={act.titleRow}>
+              <Icon name="pin" size={14} color={COLORS.primary} />
+              <Text style={act.title}>근처 즐길거리</Text>
+            </View>
             <Text style={act.subtitle}>현재 지도 위치 기준 5km</Text>
           </View>
           <TouchableOpacity onPress={() => setShowActivities(false)} style={act.closeBtn}>
-            <Text style={act.closeText}>✕</Text>
+            <CloseIcon size={14} />
           </TouchableOpacity>
         </View>
 
@@ -892,7 +881,7 @@ function PlaceSheet({
           {!!address && <Text style={sheet.address} numberOfLines={1}>{address}</Text>}
         </View>
         <TouchableOpacity onPress={onClose} style={sheet.closeBtn}>
-          <Text style={sheet.closeText}>✕</Text>
+          <CloseIcon size={14} />
         </TouchableOpacity>
       </View>
 
@@ -906,22 +895,23 @@ function PlaceSheet({
       {detail && !detailLoading && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sheet.chips}>
           {detail.openNow != null && (
-            <View style={[sheet.chip, { backgroundColor: detail.openNow ? '#E8F5E9' : '#FFEBEE' }]}>
-              <Text style={[sheet.chipText, { color: detail.openNow ? '#2E7D32' : '#C62828' }]}>
+            <View style={[sheet.chip, { backgroundColor: detail.openNow ? COLORS.openBg : COLORS.closedBg }]}>
+              <Text style={[sheet.chipText, { color: detail.openNow ? COLORS.open : COLORS.closed }]}>
                 {detail.openNow ? '영업 중' : '영업 종료'}
               </Text>
             </View>
           )}
           {!!detail.todayHours && (
             <View style={sheet.chip}>
-              <Text style={sheet.chipText}>🕐 {detail.todayHours}</Text>
+              <Icon name="clock" size={11} color={COLORS.textSub} />
+              <Text style={sheet.chipText}>{detail.todayHours}</Text>
             </View>
           )}
           {stars && (
             <View style={sheet.chip}>
               <Text style={sheet.chipText}>
-                <Text style={{ color: '#FFA000' }}>{detail.rating?.toFixed(1)} </Text>
-                <Text style={{ color: '#FFA000', fontSize: 11 }}>{stars}</Text>
+                <Text style={{ color: COLORS.rating }}>{detail.rating?.toFixed(1)} </Text>
+                <Text style={{ color: COLORS.rating, fontSize: 11 }}>{stars}</Text>
                 {detail.userRatingsTotal != null && (
                   <Text style={{ color: COLORS.textSub }}> ({detail.userRatingsTotal.toLocaleString()})</Text>
                 )}
@@ -935,7 +925,7 @@ function PlaceSheet({
           )}
           {!!detail.phone && (
             <TouchableOpacity style={sheet.chip} onPress={() => Linking.openURL(`tel:${detail.phone}`)}>
-              <Text style={sheet.chipText}>📞 {detail.phone}</Text>
+              <Text style={sheet.chipText}>{detail.phone}</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -951,15 +941,15 @@ function PlaceSheet({
 const sheet = StyleSheet.create({
   container: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'white',
+    backgroundColor: COLORS.card,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.1, shadowRadius: 10, elevation: 12,
   },
   handle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 12,
+    backgroundColor: COLORS.border, alignSelf: 'center', marginBottom: 12,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   dot: { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
@@ -967,12 +957,12 @@ const sheet = StyleSheet.create({
   name: { fontSize: 16, fontWeight: '800', color: COLORS.text },
   address: { fontSize: 11, color: COLORS.textSub, marginTop: 2 },
   closeBtn: { padding: 4 },
-  closeText: { fontSize: 14, color: '#ccc' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   loadingText: { fontSize: 12, color: COLORS.textSub },
   chips: { flexDirection: 'row', gap: 8, paddingVertical: 4, marginBottom: 12 },
   chip: {
-    backgroundColor: '#F5F5F5', paddingHorizontal: 10, paddingVertical: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: COLORS.surface, paddingHorizontal: 10, paddingVertical: 6,
     borderRadius: 20, flexShrink: 0,
   },
   chipText: { fontSize: 12, fontWeight: '600', color: COLORS.text },
@@ -990,17 +980,16 @@ const styles = StyleSheet.create({
   },
   searchBox: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'white', borderRadius: 16,
+    backgroundColor: COLORS.card, borderRadius: 16,
     paddingHorizontal: 12, paddingVertical: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12, shadowRadius: 8, elevation: 5,
     borderWidth: 1.5, borderColor: 'transparent',
   },
   searchBoxError: { borderColor: COLORS.primary },
-  searchIcon: { fontSize: 15, marginRight: 8 },
+  searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, fontWeight: '500', color: COLORS.text, padding: 0 },
   clearBtn: { padding: 4, marginRight: 4 },
-  clearText: { fontSize: 13, color: '#ccc' },
   searchBtn: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
@@ -1008,17 +997,16 @@ const styles = StyleSheet.create({
   searchBtnText: { color: 'white', fontSize: 12, fontWeight: '700' },
   errorText: { marginTop: 6, marginLeft: 4, fontSize: 12, color: COLORS.primary, fontWeight: '500' },
   suggestionsBox: {
-    marginTop: 6, backgroundColor: 'white', borderRadius: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    marginTop: 6, backgroundColor: COLORS.card, borderRadius: 16,
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1, shadowRadius: 8, elevation: 5,
     overflow: 'hidden',
   },
   suggestionItem: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 14, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
+    borderBottomWidth: 1, borderBottomColor: COLORS.surface,
   },
-  suggestionIcon: { fontSize: 13 },
   suggestionText: { flex: 1, fontSize: 13, color: COLORS.text, fontWeight: '500' },
 
   resultsPanel: {
@@ -1030,14 +1018,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   resultsSheet: {
-    backgroundColor: 'white',
+    backgroundColor: COLORS.card,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingTop: 12, paddingBottom: 32,
     maxHeight: '60%',
   },
   modalHandle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 12,
+    backgroundColor: COLORS.border, alignSelf: 'center', marginBottom: 12,
   },
   resultsTitleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -1045,11 +1033,10 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
   resultsDismiss: { padding: 4 },
-  resultsDismissText: { fontSize: 16, color: '#ccc' },
   resultItem: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F5F5F5', gap: 12,
+    borderBottomWidth: 1, borderBottomColor: COLORS.surface, gap: 12,
   },
   resultItemLast: { borderBottomWidth: 0 },
   resultIcon: {
@@ -1057,11 +1044,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight,
     justifyContent: 'center', alignItems: 'center',
   },
-  resultIconText: { fontSize: 16 },
   resultTexts: { flex: 1, gap: 2 },
   resultName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   resultAddress: { fontSize: 11, color: COLORS.textSub },
-  resultArrow: { fontSize: 20, color: '#D0D0D0', fontWeight: '300' },
+  resultArrow: { fontSize: 20, color: COLORS.textMuted, fontWeight: '300' },
   loadingMore: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'center', paddingVertical: 14, gap: 8,
@@ -1071,13 +1057,13 @@ const styles = StyleSheet.create({
   routeBanner: {
     position: 'absolute', top: 72, alignSelf: 'center',
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: COLORS.card, paddingHorizontal: 16, paddingVertical: 8,
     borderRadius: 20,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1, shadowRadius: 6, elevation: 4,
   },
   routeBannerText: { fontSize: 13, color: COLORS.textSub, fontWeight: '500' },
-  routeBannerFailed: { backgroundColor: '#FFF3F3' },
+  routeBannerFailed: { backgroundColor: COLORS.primaryLight },
   routeBannerFailedText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
 
 })

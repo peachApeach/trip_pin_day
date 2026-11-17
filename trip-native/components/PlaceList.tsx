@@ -2,7 +2,8 @@ import {
   View, Text, TextInput, TouchableOpacity,
   FlatList, StyleSheet, ListRenderItemInfo,
 } from 'react-native'
-import { COLORS } from '../constants'
+import { COLORS, PLACE_COLORS } from '../constants'
+import Icon, { CloseIcon } from './Icon'
 import type { Place } from '../types'
 
 interface PlaceItemProps {
@@ -34,13 +35,7 @@ const DURATION_OPTIONS = [
   { label: '4시간', value: 240 },
 ] as const
 
-const CARD_COLORS = [
-  { bg: '#FFE8EE', dot: COLORS.primary },
-  { bg: '#E0F7F5', dot: COLORS.mint },
-  { bg: '#FFF8E1', dot: '#FFB300' },
-  { bg: '#EDE7F6', dot: '#7C4DFF' },
-  { bg: '#E8F5E9', dot: '#43A047' },
-]
+const CARD_COLORS = PLACE_COLORS
 
 function PlaceItem({ place, index, isSelected, onSelect, onRemove, onUpdateName, onUpdateDuration }: PlaceItemProps) {
   const color = CARD_COLORS[index % CARD_COLORS.length]
@@ -62,15 +57,18 @@ function PlaceItem({ place, index, isSelected, onSelect, onRemove, onUpdateName,
             value={place.name}
             onChangeText={(text) => onUpdateName(place.id, text)}
             placeholder="장소 이름"
-            placeholderTextColor="#ccc"
+            placeholderTextColor={COLORS.textMuted}
           />
           <TouchableOpacity style={styles.removeBtn} onPress={() => onRemove(place.id)}>
-            <Text style={styles.removeText}>✕</Text>
+            <CloseIcon size={13} />
           </TouchableOpacity>
         </View>
 
         {!!place.address && (
-          <Text style={styles.address} numberOfLines={1}>📌 {place.address}</Text>
+          <View style={styles.addressRow}>
+            <Icon name="pin" size={11} color={COLORS.textMuted} />
+            <Text style={styles.address} numberOfLines={1}>{place.address}</Text>
+          </View>
         )}
 
         <View style={styles.durationRow}>
@@ -107,7 +105,7 @@ export default function PlaceList({
   if (places.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyEmoji}>🗺️</Text>
+        <Icon name="map" size={48} color={COLORS.primaryLight} />
         <Text style={styles.emptyTitle}>아직 장소가 없어요</Text>
         <Text style={styles.emptyDesc}>지도를 탭해서 가고 싶은 곳을 추가해보세요</Text>
         <TouchableOpacity style={styles.emptyBtn} onPress={onShowMap}>
@@ -146,7 +144,6 @@ const styles = StyleSheet.create({
     padding: 32,
     gap: 8,
   },
-  emptyEmoji: { fontSize: 48, marginBottom: 4 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   emptyDesc: { fontSize: 13, color: COLORS.textSub, textAlign: 'center', lineHeight: 20 },
   emptyBtn: {
@@ -160,10 +157,10 @@ const styles = StyleSheet.create({
   list: { padding: 16, gap: 12 },
   item: {
     flexDirection: 'row',
-    backgroundColor: 'white',
+    backgroundColor: COLORS.card,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#FF6B8A',
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -180,15 +177,15 @@ const styles = StyleSheet.create({
   orderText: { fontSize: 12, fontWeight: '800' },
   nameInput: { flex: 1, fontSize: 15, fontWeight: '700', color: COLORS.text, padding: 0 },
   removeBtn: { padding: 4 },
-  removeText: { fontSize: 13, color: '#D0D0D0' },
-  address: { fontSize: 11, color: COLORS.textSub },
+  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  address: { flex: 1, fontSize: 11, color: COLORS.textSub },
   durationRow: { gap: 6 },
   durationLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
   durationButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   durationBtn: {
     paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 20, borderWidth: 1.5,
-    borderColor: '#EBEBEB', backgroundColor: '#FAFAFA',
+    borderColor: COLORS.border, backgroundColor: COLORS.surface,
   },
   durationBtnText: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
   durationBtnTextActive: { color: 'white' },

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Switch, ActivityIndicator } from 'react-native'
 import MapView, { Marker, Polyline } from 'react-native-maps'
 import { COLORS, PLACE_COLORS } from '../constants'
+import Icon from './Icon'
 import type { Trip, Place } from '../types'
 
 interface Props {
@@ -69,14 +70,18 @@ export default function TripOverviewScreen({
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>{trip.title}</Text>
         <TouchableOpacity style={styles.enterBtn} onPress={() => onEnter(selectedDay)}>
-          <Text style={styles.enterBtnText}>일정 상세 →</Text>
+          <Text style={styles.enterBtnText}>일정 상세</Text>
+          <Text style={styles.enterBtnArrow}>›</Text>
         </TouchableOpacity>
       </View>
 
       {/* 일정 알림 */}
       <View style={styles.notifyRow}>
         <View style={styles.notifyInfo}>
-          <Text style={styles.notifyTitle}>⏰ 일정 10분 전 알림</Text>
+          <View style={styles.notifyTitleRow}>
+            <Icon name="notification" size={15} color={notifyEnabled ? COLORS.primary : COLORS.textSub} />
+            <Text style={styles.notifyTitle}>일정 10분 전 알림</Text>
+          </View>
           <Text style={styles.notifySub}>
             {notifyBusy
               ? '알림 시간을 계산하고 있어요…'
@@ -189,7 +194,8 @@ export default function TripOverviewScreen({
           <View style={styles.mapEmpty}>
             <Text style={styles.mapEmptyText}>이 날 장소가 없어요</Text>
             <TouchableOpacity style={styles.mapEmptyBtn} onPress={() => onEnter(selectedDay)}>
-              <Text style={styles.mapEmptyBtnText}>+ 일정 추가하기</Text>
+              <Icon name="plus" size={12} color="white" />
+            <Text style={styles.mapEmptyBtnText}>일정 추가하기</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -238,29 +244,32 @@ const styles = StyleSheet.create({
   backIcon: { fontSize: 22, color: COLORS.primary, fontWeight: '700', lineHeight: 26 },
   title: { flex: 1, fontSize: 18, fontWeight: '800', color: COLORS.text },
   enterBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
     backgroundColor: COLORS.primary,
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
   },
   enterBtnText: { color: 'white', fontSize: 12, fontWeight: '700' },
+  enterBtnArrow: { color: 'white', fontSize: 15, fontWeight: '700', marginTop: -1 },
 
   notifyRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: 'white', borderRadius: 14,
+    backgroundColor: COLORS.card, borderRadius: 14,
     paddingHorizontal: 14, paddingVertical: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
   notifyInfo: { flex: 1, gap: 2 },
+  notifyTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   notifyTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   notifySub: { fontSize: 11, color: COLORS.textSub },
 
-  dayTabsWrap: { maxHeight: 64, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  dayTabsWrap: { maxHeight: 64, backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   dayTabs: { paddingHorizontal: 12, paddingVertical: 8, gap: 8, alignItems: 'center' },
   dayTab: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: 'white',
+    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.card,
   },
   dayTabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   dayTabText: { fontSize: 13, fontWeight: '700', color: COLORS.textSub },
@@ -279,18 +288,19 @@ const styles = StyleSheet.create({
   mapWrap: {
     height: 260, margin: 16, borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08, shadowRadius: 8, elevation: 4,
   },
   mapEmpty: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#F5F5F5', gap: 12,
+    backgroundColor: COLORS.surface, gap: 12,
   },
   mapEmptyText: { fontSize: 13, color: COLORS.textSub },
   mapEmptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20,
+    paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20,
   },
   mapEmptyBtnText: { color: 'white', fontSize: 13, fontWeight: '700' },
 
@@ -299,14 +309,14 @@ const styles = StyleSheet.create({
   placeEmptyText: { fontSize: 13, color: COLORS.textSub, textAlign: 'center', marginTop: 16 },
   placeRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: 'white', borderRadius: 14, padding: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    backgroundColor: COLORS.card, borderRadius: 14, padding: 12,
+    shadowColor: COLORS.text, shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
   placeNum: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   placeNumText: { fontSize: 12, fontWeight: '800' },
   placeInfo: { flex: 1 },
-  placeArrow: { fontSize: 20, color: '#D0D0D0' },
+  placeArrow: { fontSize: 20, color: COLORS.textMuted },
   placeName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   placeAddr: { fontSize: 11, color: COLORS.textSub, marginTop: 2 },
 })
