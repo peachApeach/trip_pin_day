@@ -40,6 +40,12 @@ module.exports = {
       '@react-native-community/datetimepicker',
       'expo-asset',
       [
+        'expo-notifications',
+        {
+          color: '#FF6B8A',
+        },
+      ],
+      [
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission:

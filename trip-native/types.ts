@@ -14,6 +14,8 @@ export interface Trip {
   tripStartDate: string | null
   tripEndDate: string | null
   budgets?: BudgetItem[]
+  /** 일정 10분 전 알림 켜짐 여부 (없으면 꺼진 것으로 본다) */
+  notifyEnabled?: boolean
 }
 
 export interface Place {
