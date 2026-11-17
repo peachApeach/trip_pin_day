@@ -1,13 +1,13 @@
 import { useRef, useState, useEffect } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Keyboard, FlatList, ScrollView, Linking, Dimensions,
+  ActivityIndicator, Keyboard, FlatList, ScrollView, Linking, Dimensions, Image,
 } from 'react-native'
 import MapView, { Marker, Polyline, MapPressEvent, PoiClickEvent, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { COLORS, PLACE_COLORS } from '../constants'
 import { latLngParam } from '../utils/geo'
-import { mapsFetch } from '../utils/mapsApi'
+import { mapsFetch, mapsImageSource } from '../utils/mapsApi'
 import { fetchTimeZone } from '../utils/timezone'
 import type { Place } from '../types'
 
@@ -109,6 +109,20 @@ const act = StyleSheet.create({
     backgroundColor: '#FAFAFA', borderRadius: 14, padding: 12,
     borderWidth: 1, borderColor: '#F0F0F0', gap: 6,
   },
+  // 사진 + 글을 좌우로 — 사진이 없는 카드와 높이가 비슷하게 유지된다
+  cardRow: { flexDirection: 'row', gap: 10 },
+  cardTexts: { flex: 1, gap: 4 },
+  thumb: {
+    width: 68, height: 68, borderRadius: 10,
+    backgroundColor: '#ECECEC',
+  },
+  // 사진이 없거나 못 불러왔을 때 자리만 지킨다 (레이아웃이 흔들리지 않게)
+  thumbFallback: {
+    width: 68, height: 68, borderRadius: 10,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  thumbFallbackText: { fontSize: 22, opacity: 0.35 },
   cardName: { fontSize: 13, fontWeight: '700', color: COLORS.text },
   cardAddr: { fontSize: 10, color: COLORS.textSub },
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
@@ -237,10 +251,13 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
   const [showActivities, setShowActivities] = useState(false)
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [activitiesLoading, setActivitiesLoading] = useState(false)
+  // 사진을 못 불러온 장소. 깨진 아이콘 대신 자리표시로 바꾼다.
+  const [photoFailed, setPhotoFailed] = useState<string[]>([])
 
   const fetchActivities = async () => {
     setActivitiesLoading(true)
     setActivities([])
+    setPhotoFailed([])
     try {
       let latitude = currentRegionRef.current.latitude
       let longitude = currentRegionRef.current.longitude
@@ -299,16 +316,34 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
     const stars = item.rating ? `★ ${item.rating.toFixed(1)}` : null
     const price = item.priceLevel != null ? '₩'.repeat(item.priceLevel + 1) : null
     const klookUrl = `https://www.klook.com/ko/search/?query=${encodeURIComponent(item.name)}&af_id=PARTNER_ID`
+    const failed = photoFailed.includes(item.placeId)
     return (
       <TouchableOpacity style={act.card} onPress={() => handleActivityPress(item)} activeOpacity={0.75}>
-        <Text style={act.cardName} numberOfLines={2}>{item.name}</Text>
-        <Text style={act.cardAddr} numberOfLines={1}>📌 {item.address}</Text>
-        <View style={act.cardMeta}>
-          {stars && <Text style={act.metaRating}>{stars}</Text>}
-          {item.userRatingsTotal != null && (
-            <Text style={act.metaCount}>({item.userRatingsTotal.toLocaleString()})</Text>
+        <View style={act.cardRow}>
+          {item.photoRef && !failed ? (
+            <Image
+              style={act.thumb}
+              source={mapsImageSource(item.photoRef, 200)}
+              resizeMode="cover"
+              // 사진이 막히거나 깨져도 카드는 그대로 쓸 수 있어야 한다
+              onError={() => setPhotoFailed(prev => prev.includes(item.placeId) ? prev : [...prev, item.placeId])}
+            />
+          ) : (
+            <View style={act.thumbFallback}>
+              <Text style={act.thumbFallbackText}>🏞️</Text>
+            </View>
           )}
-          {price && <Text style={act.metaPrice}>{price}</Text>}
+          <View style={act.cardTexts}>
+            <Text style={act.cardName} numberOfLines={2}>{item.name}</Text>
+            <Text style={act.cardAddr} numberOfLines={2}>📌 {item.address}</Text>
+            <View style={act.cardMeta}>
+              {stars && <Text style={act.metaRating}>{stars}</Text>}
+              {item.userRatingsTotal != null && (
+                <Text style={act.metaCount}>({item.userRatingsTotal.toLocaleString()})</Text>
+              )}
+              {price && <Text style={act.metaPrice}>{price}</Text>}
+            </View>
+          </View>
         </View>
         <TouchableOpacity style={act.klookBtn} onPress={(e) => { e.stopPropagation(); Linking.openURL(klookUrl) }}>
           <Text style={act.klookBtnText}>🎫 클룩에서 예약하기</Text>

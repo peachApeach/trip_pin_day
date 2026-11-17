@@ -44,3 +44,28 @@ export function mapsHeaders(): Record<string, string> {
 export function mapsFetch(path: string, params: Record<string, string | number>): Promise<Response> {
   return fetch(mapsUrl(path, params), { headers: mapsHeaders() })
 }
+
+/**
+ * 장소 사진 URL. <Image source={{ uri }}>에 바로 넣는다.
+ *
+ * 프록시 경유일 때 토큰을 쿼리로 보낼 수 없어(헤더만 받는다) Image가
+ * 직접 못 불러오므로, 호출부에서 headers를 함께 넘겨야 한다.
+ * → mapsImageSource()를 쓰면 둘을 한 번에 얻는다.
+ */
+export function photoUrl(photoRef: string, maxWidth = 400): string {
+  return mapsUrl('/place/photo', { photo_reference: photoRef, maxwidth: maxWidth })
+}
+
+/**
+ * RN <Image>용 source. 프록시는 x-app-token 헤더를 요구하므로
+ * uri만으로는 401이 난다. headers까지 실어 보낸다.
+ */
+export function mapsImageSource(photoRef: string, maxWidth = 400): {
+  uri: string
+  headers?: Record<string, string>
+} {
+  const headers = mapsHeaders()
+  const src: { uri: string; headers?: Record<string, string> } = { uri: photoUrl(photoRef, maxWidth) }
+  if (Object.keys(headers).length > 0) src.headers = headers
+  return src
+}

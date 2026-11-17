@@ -19,11 +19,15 @@ const ALLOWED_PATHS = new Set([
   '/place/autocomplete/json',
   '/place/details/json',
   '/place/nearbysearch/json',
+  '/place/photo',
   '/geocode/json',
   '/distancematrix/json',
   '/directions/json',
   '/timezone/json',
 ])
+
+// 사진만 JSON이 아니라 이미지 바이트를 돌려준다. 응답 처리가 달라서 따로 둔다.
+const PHOTO_PATH = '/place/photo'
 
 // 클라이언트가 보낼 수 있는 쿼리 파라미터. key는 서버가 주입하므로
 // 클라이언트가 보낸 key는 무시한다(덮어쓰기 방지).
@@ -32,7 +36,14 @@ const ALLOWED_PARAMS = new Set([
   'location', 'latlng', 'radius', 'rankby', 'keyword', 'type',
   'origin', 'destination', 'origins', 'destinations', 'mode',
   'timestamp', 'language',
+  'photo_reference', 'maxwidth', 'maxheight',
 ])
+
+/**
+ * 사진 크기 상한. 상한이 없으면 호출자가 maxwidth=4000으로 대용량 이미지를
+ * 반복 요청해 할당량과 대역폭을 태울 수 있다. 카드 썸네일에는 이 정도면 충분하다.
+ */
+const PHOTO_MAX_PX = 800
 
 const CACHE_TTL = {
   '/timezone/json': 60 * 60 * 24 * 30, // 타임존은 거의 안 바뀜
@@ -47,6 +58,45 @@ function deny(status, message) {
     status,
     headers: { 'content-type': 'application/json; charset=utf-8' },
   })
+}
+
+/**
+ * 장소 사진 중계. Google은 302로 실제 이미지 호스트를 가리키는데,
+ * 그 Location URL에 키가 들어 있지 않으므로 리다이렉트를 따라가
+ * 이미지 바이트만 돌려준다. redirect를 클라이언트에 넘기면
+ * 앱이 Google 도메인을 직접 타게 되어 중계 의미가 줄어든다.
+ */
+async function photo(upstream, ctx) {
+  // 사진은 photo_reference가 같으면 내용이 바뀌지 않는다. 길게 캐시한다.
+  const ttl = 60 * 60 * 24 * 30
+  const cacheKey = new Request(upstream.toString(), { method: 'GET' })
+  const cache = caches.default
+
+  const hit = await cache.match(cacheKey)
+  if (hit) return hit
+
+  let res
+  try {
+    res = await fetch(upstream.toString(), { redirect: 'follow' })
+  } catch {
+    return deny(502, 'photo fetch failed')
+  }
+
+  const type = res.headers.get('content-type') ?? ''
+  // 에러일 때 Google은 JSON이나 HTML을 준다. 그걸 이미지로 캐시하면 안 된다.
+  if (!res.ok || !type.startsWith('image/')) {
+    return deny(502, 'photo unavailable')
+  }
+
+  const out = new Response(res.body, {
+    status: 200,
+    headers: {
+      'content-type': type,
+      'cache-control': `public, max-age=${ttl}`,
+    },
+  })
+  ctx.waitUntil(cache.put(cacheKey, out.clone()))
+  return out
 }
 
 export default {
@@ -70,6 +120,25 @@ export default {
       if (ALLOWED_PARAMS.has(k)) upstream.searchParams.set(k, v)
     }
     upstream.searchParams.set('key', env.GOOGLE_MAPS_API_KEY)
+
+    if (url.pathname === PHOTO_PATH) {
+      if (!upstream.searchParams.get('photo_reference')) {
+        return deny(400, 'photo_reference required')
+      }
+      // 크기를 상한으로 깎는다. 둘 다 없으면 기본값을 넣어
+      // Google이 원본 크기를 돌려주지 않게 한다.
+      let sized = false
+      for (const p of ['maxwidth', 'maxheight']) {
+        const raw = upstream.searchParams.get(p)
+        if (raw == null) continue
+        const n = Number(raw)
+        if (!Number.isFinite(n) || n <= 0) { upstream.searchParams.delete(p); continue }
+        upstream.searchParams.set(p, String(Math.min(Math.floor(n), PHOTO_MAX_PX)))
+        sized = true
+      }
+      if (!sized) upstream.searchParams.set('maxwidth', String(PHOTO_MAX_PX))
+      return photo(upstream, ctx)
+    }
 
     // 같은 쿼리는 엣지 캐시에서 돌려준다. Google 호출량이 줄어
     // 비용과 남용 여지가 함께 내려간다. 캐시 키에는 key가 포함되지만
