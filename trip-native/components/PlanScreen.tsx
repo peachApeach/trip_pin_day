@@ -1,10 +1,12 @@
 import { useState, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, Platform, Linking, PanResponder, Modal,
+  StyleSheet, ActivityIndicator, Platform, Linking, PanResponder,
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
-import { COLORS, PLACE_COLORS, G20_CURRENCIES } from '../constants'
+import { COLORS, PLACE_COLORS } from '../constants'
+import { CURRENCIES } from '../utils/currency'
+import CurrencyPicker from './CurrencyPicker'
 import {
   effectiveOffset, zonedWallClockToUtc, formatTimeInZone as formatTime,
   dayOffsetInZone, dayOffsetLabel, tzLabel, tzShiftLabel,
@@ -450,7 +452,7 @@ export default function PlanScreen({
                         <View style={styles.budgetInputWrap}>
                           <TouchableOpacity style={styles.currencyBtn} onPress={() => setCurrencyPickerId(item.id)}>
                             <Text style={styles.currencyBtnText}>
-                              {G20_CURRENCIES.find(c => c.code === (item.budgetCurrency ?? 'KRW'))?.symbol ?? '₩'}
+                              {CURRENCIES.find(c => c.code === (item.budgetCurrency ?? 'KRW'))?.symbol ?? '₩'}
                             </Text>
                             <Text style={styles.currencyBtnCode}>{item.budgetCurrency ?? 'KRW'}</Text>
                           </TouchableOpacity>
@@ -604,30 +606,15 @@ export default function PlanScreen({
         })}
 
         {/* 통화 선택 모달 */}
-        <Modal visible={currencyPickerId !== null} transparent animationType="fade" onRequestClose={() => setCurrencyPickerId(null)}>
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCurrencyPickerId(null)}>
-            <View style={styles.currencyList}>
-              <Text style={styles.currencyListTitle}>통화 선택</Text>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {G20_CURRENCIES.map(c => {
-                  const currentPlace = places.find(p => p.id === currencyPickerId)
-                  const isActive = (currentPlace?.budgetCurrency ?? 'KRW') === c.code
-                  return (
-                    <TouchableOpacity
-                      key={c.code}
-                      style={[styles.currencyItem, isActive && styles.currencyItemActive]}
-                      onPress={() => { if (currencyPickerId !== null) { onUpdateBudgetCurrency(currencyPickerId, c.code); setCurrencyPickerId(null) } }}
-                    >
-                      <Text style={styles.currencyItemSymbol}>{c.symbol}</Text>
-                      <Text style={styles.currencyItemCode}>{c.code}</Text>
-                      <Text style={styles.currencyItemLabel}>{c.label}</Text>
-                    </TouchableOpacity>
-                  )
-                })}
-              </ScrollView>
-            </View>
-          </TouchableOpacity>
-        </Modal>
+        <CurrencyPicker
+          visible={currencyPickerId !== null}
+          selected={places.find(p => p.id === currencyPickerId)?.budgetCurrency ?? 'KRW'}
+          onSelect={code => {
+            if (currencyPickerId !== null) onUpdateBudgetCurrency(currencyPickerId, code)
+            setCurrencyPickerId(null)
+          }}
+          onClose={() => setCurrencyPickerId(null)}
+        />
 
         {/* 예산 합계 — 통화별 그룹 */}
         {(() => {
@@ -643,7 +630,7 @@ export default function PlanScreen({
               <Text style={styles.budgetSummaryLabel}>💰 이번 일정 예산</Text>
               <View style={styles.budgetSummaryAmounts}>
                 {Object.entries(grouped).map(([code, total]) => {
-                  const sym = G20_CURRENCIES.find(c => c.code === code)?.symbol ?? code
+                  const sym = CURRENCIES.find(c => c.code === code)?.symbol ?? code
                   return (
                     <Text key={code} style={styles.budgetSummaryAmount}>
                       {sym}{total.toLocaleString()}
@@ -879,21 +866,6 @@ const styles = StyleSheet.create({
   budgetSummaryLabel: { fontSize: 13, fontWeight: '600', color: '#795548' },
   budgetSummaryAmounts: { alignItems: 'flex-end', gap: 2 },
   budgetSummaryAmount: { fontSize: 16, fontWeight: '800', color: '#E65100' },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  currencyList: {
-    backgroundColor: 'white', borderRadius: 20, padding: 16,
-    width: 280, maxHeight: 400,
-  },
-  currencyListTitle: { fontSize: 15, fontWeight: '800', color: COLORS.text, marginBottom: 12, textAlign: 'center' },
-  currencyItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10,
-  },
-  currencyItemActive: { backgroundColor: COLORS.primaryLight },
-  currencyItemSymbol: { fontSize: 16, width: 24, textAlign: 'center', fontWeight: '700', color: COLORS.primary },
-  currencyItemCode: { fontSize: 13, fontWeight: '700', color: COLORS.text, width: 40 },
-  currencyItemLabel: { fontSize: 12, color: COLORS.textSub, flex: 1 },
 
   endCard: {
     flex: 1, backgroundColor: '#E8F5E9', borderRadius: 16,

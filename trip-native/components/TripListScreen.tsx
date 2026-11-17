@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import {
   View, Text, TouchableOpacity, FlatList,
-  StyleSheet, TextInput, KeyboardAvoidingView, Platform, ScrollView, Modal,
+  StyleSheet, TextInput, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator,
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
-import { COLORS, G20_CURRENCIES } from '../constants'
+import { COLORS } from '../constants'
+import { CURRENCIES } from '../utils/currency'
+import CurrencyPicker from './CurrencyPicker'
 import type { Trip, BudgetItem } from '../types'
 
 interface Props {
@@ -13,6 +16,11 @@ interface Props {
   onAdd: (title: string, tripStartDate: string | null, tripEndDate: string | null, budgets: BudgetItem[]) => void
   onEdit: (id: number, title: string, tripStartDate: string | null, tripEndDate: string | null, budgets: BudgetItem[]) => void
   onDelete: (id: number) => void
+  /** 알림 예약/취소가 진행 중인 여행 id 목록 */
+  notifyBusyIds: number[]
+  /** 여행 id별 예약된 알림 수 */
+  notifyCounts: Record<number, number>
+  onToggleNotify: (tripId: number, enabled: boolean) => void
 }
 
 const CARD_COLORS = [COLORS.primary, COLORS.mint, '#FFB300', '#7C4DFF', '#43A047']
@@ -34,7 +42,10 @@ function calcNights(start: string | null, end: string | null): string {
 
 type PickerTarget = 'start' | 'end' | null
 
-export default function TripListScreen({ trips, onSelect, onAdd, onEdit, onDelete }: Props) {
+export default function TripListScreen({
+  trips, onSelect, onAdd, onEdit, onDelete,
+  notifyBusyIds, notifyCounts, onToggleNotify,
+}: Props) {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [title, setTitle] = useState('')
@@ -82,7 +93,7 @@ export default function TripListScreen({ trips, onSelect, onAdd, onEdit, onDelet
 
   const addBudgetRow = () => {
     const usedCodes = new Set(budgets.map(b => b.currency))
-    const next = G20_CURRENCIES.find(c => !usedCodes.has(c.code))
+    const next = CURRENCIES.find(c => !usedCodes.has(c.code))
     if (!next) return
     setBudgets(prev => [...prev, { currency: next.code, amount: 0 }])
   }
@@ -190,7 +201,7 @@ export default function TripListScreen({ trips, onSelect, onAdd, onEdit, onDelet
 
           <Text style={[styles.addCardLabel, { marginTop: 4 }]}>총 예산</Text>
           {budgets.map((b, i) => {
-            const currInfo = G20_CURRENCIES.find(c => c.code === b.currency)
+            const currInfo = CURRENCIES.find(c => c.code === b.currency)
             return (
               <View key={i} style={styles.budgetRow}>
                 <TouchableOpacity style={styles.currencyBtn} onPress={() => setCurrencyPickerIndex(i)}>
@@ -211,32 +222,19 @@ export default function TripListScreen({ trips, onSelect, onAdd, onEdit, onDelet
               </View>
             )
           })}
-          {budgets.length < G20_CURRENCIES.length && (
+          {budgets.length < CURRENCIES.length && (
             <TouchableOpacity style={styles.budgetAddBtn} onPress={addBudgetRow}>
               <Text style={styles.budgetAddBtnText}>+ 통화 추가</Text>
             </TouchableOpacity>
           )}
 
-          <Modal visible={currencyPickerIndex !== null} transparent animationType="fade" onRequestClose={() => setCurrencyPickerIndex(null)}>
-            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCurrencyPickerIndex(null)}>
-              <View style={styles.currencyList}>
-                <Text style={styles.currencyListTitle}>통화 선택</Text>
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  {G20_CURRENCIES.filter(c => c.code === budgets[currencyPickerIndex!]?.currency || !budgets.some(b => b.currency === c.code)).map(c => (
-                    <TouchableOpacity
-                      key={c.code}
-                      style={[styles.currencyItem, budgets[currencyPickerIndex!]?.currency === c.code && styles.currencyItemActive]}
-                      onPress={() => currencyPickerIndex !== null && updateBudgetCurrency(currencyPickerIndex, c.code)}
-                    >
-                      <Text style={styles.currencyItemSymbol}>{c.symbol}</Text>
-                      <Text style={styles.currencyItemCode}>{c.code}</Text>
-                      <Text style={styles.currencyItemLabel}>{c.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </TouchableOpacity>
-          </Modal>
+          <CurrencyPicker
+            visible={currencyPickerIndex !== null}
+            selected={currencyPickerIndex !== null ? budgets[currencyPickerIndex]?.currency : undefined}
+            exclude={budgets.map(b => b.currency)}
+            onSelect={code => currencyPickerIndex !== null && updateBudgetCurrency(currencyPickerIndex, code)}
+            onClose={() => setCurrencyPickerIndex(null)}
+          />
 
           <View style={styles.addCardButtons}>
             <TouchableOpacity style={styles.addCardCancel} onPress={handleCancel}>
@@ -273,6 +271,9 @@ export default function TripListScreen({ trips, onSelect, onAdd, onEdit, onDelet
             const color = CARD_COLORS[index % CARD_COLORS.length]
             const emoji = TRIP_EMOJIS[index % TRIP_EMOJIS.length]
             const nights = calcNights(item.tripStartDate, item.tripEndDate)
+            const notifyOn = item.notifyEnabled ?? false
+            const notifyBusy = notifyBusyIds.includes(item.id)
+            const notifyCount = notifyCounts[item.id] ?? 0
             return (
               <TouchableOpacity style={styles.card} onPress={() => onSelect(item)} activeOpacity={0.8}>
                 <View style={[styles.cardAccent, { backgroundColor: color }]} />
@@ -287,29 +288,52 @@ export default function TripListScreen({ trips, onSelect, onAdd, onEdit, onDelet
                         {`${formatDate(item.tripStartDate)} ~ ${formatDate(item.tripEndDate)}${nights ? `  ${nights}` : ''}`}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      style={styles.cardEdit}
-                      onPress={() => openEdit(item)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.cardEditText}>✏️</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.cardDelete}
-                      onPress={() => onDelete(item.id)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.cardDeleteText}>🗑️</Text>
-                    </TouchableOpacity>
+                    <View style={styles.cardActions}>
+                      {notifyBusy ? (
+                        <View style={styles.cardNotify}>
+                          <ActivityIndicator size="small" color={COLORS.primary} />
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.cardNotify, notifyOn && styles.cardNotifyOn]}
+                          onPress={() => onToggleNotify(item.id, !notifyOn)}
+                          hitSlop={{ top: 8, bottom: 4, left: 4, right: 4 }}
+                          accessibilityRole="switch"
+                          accessibilityState={{ checked: notifyOn }}
+                          accessibilityLabel={`${item.title} 일정 알림 ${notifyOn ? '끄기' : '켜기'}`}
+                        >
+                          <Text style={[styles.cardNotifyText, !notifyOn && styles.cardNotifyTextOff]}>
+                            {notifyOn ? '🔔' : '🔕'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={styles.cardEdit}
+                        onPress={() => openEdit(item)}
+                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      >
+                        <Text style={styles.cardEditText}>✏️</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.cardDelete}
+                        onPress={() => onDelete(item.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                      >
+                        <Text style={styles.cardDeleteText}>🗑️</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                   <View style={styles.cardBottomRow}>
                     {item.tripStartDate && item.places.length > 0 && (
                       <Text style={[styles.cardMetaBottom, { color }]}>장소 {item.places.length}곳</Text>
                     )}
+                    {notifyOn && notifyCount > 0 && (
+                      <Text style={styles.cardNotifyCount}>🔔 {notifyCount}</Text>
+                    )}
                     {item.budgets && item.budgets.length > 0 && (
                       <Text style={styles.cardBudget} numberOfLines={1}>
                         {item.budgets.map(b => {
-                          const sym = G20_CURRENCIES.find(c => c.code === b.currency)?.symbol ?? b.currency
+                          const sym = CURRENCIES.find(c => c.code === b.currency)?.symbol ?? b.currency
                           return `${sym}${b.amount.toLocaleString()}`
                         }).join(' · ')}
                       </Text>
@@ -397,6 +421,18 @@ const styles = StyleSheet.create({
   cardBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginLeft: 56 },
   cardMetaBottom: { fontSize: 11, fontWeight: '600' },
   cardBudget: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
+  // 알림·수정·삭제를 한 묶음으로 — cardTop의 gap 12가 버튼 사이에 끼지 않도록
+  cardActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  cardNotify: {
+    width: 30, height: 30, borderRadius: 15,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.bg,
+  },
+  cardNotifyOn: { backgroundColor: COLORS.primaryLight },
+  cardNotifyText: { fontSize: 15 },
+  // 꺼진 상태는 흐리게 — 켜진 쪽이 한눈에 구분되도록
+  cardNotifyTextOff: { opacity: 0.35 },
+  cardNotifyCount: { fontSize: 11, fontWeight: '600', color: COLORS.primary },
   cardEdit: { padding: 4 },
   cardEditText: { fontSize: 16 },
   cardDelete: { padding: 4 },
@@ -420,21 +456,6 @@ const styles = StyleSheet.create({
     borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, borderStyle: 'dashed',
   },
   budgetAddBtnText: { fontSize: 12, fontWeight: '600', color: COLORS.textSub },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  currencyList: {
-    backgroundColor: 'white', borderRadius: 20, padding: 16,
-    width: 280, maxHeight: 400,
-  },
-  currencyListTitle: { fontSize: 15, fontWeight: '800', color: COLORS.text, marginBottom: 12, textAlign: 'center' },
-  currencyItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10,
-  },
-  currencyItemActive: { backgroundColor: COLORS.primaryLight },
-  currencyItemSymbol: { fontSize: 16, width: 24, textAlign: 'center', fontWeight: '700', color: COLORS.primary },
-  currencyItemCode: { fontSize: 13, fontWeight: '700', color: COLORS.text, width: 40 },
-  currencyItemLabel: { fontSize: 12, color: COLORS.textSub, flex: 1 },
 
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, padding: 32 },
   emptyEmoji: { fontSize: 56 },

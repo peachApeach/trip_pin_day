@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Switch, ActivityIndicator } from 'react-native'
 import MapView, { Marker, Polyline } from 'react-native-maps'
 import { COLORS, PLACE_COLORS } from '../constants'
 import type { Trip, Place } from '../types'
@@ -8,6 +8,11 @@ interface Props {
   trip: Trip
   onEnter: (dayIndex: number | null) => void
   onBack: () => void
+  notifyEnabled: boolean
+  notifyBusy: boolean
+  /** 예약된 알림 수 (꺼져 있으면 0) */
+  notifyCount: number
+  onToggleNotify: (enabled: boolean) => void
 }
 
 function formatDate(iso: string | null, offset = 0): string {
@@ -22,7 +27,10 @@ function calcDays(start: string, end: string): number {
   return Math.max(1, diff + 1)
 }
 
-export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
+export default function TripOverviewScreen({
+  trip, onEnter, onBack,
+  notifyEnabled, notifyBusy, notifyCount, onToggleNotify,
+}: Props) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const mapRef = useRef<MapView>(null)
 
@@ -63,6 +71,30 @@ export default function TripOverviewScreen({ trip, onEnter, onBack }: Props) {
         <TouchableOpacity style={styles.enterBtn} onPress={() => onEnter(selectedDay)}>
           <Text style={styles.enterBtnText}>일정 상세 →</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* 일정 알림 */}
+      <View style={styles.notifyRow}>
+        <View style={styles.notifyInfo}>
+          <Text style={styles.notifyTitle}>⏰ 일정 10분 전 알림</Text>
+          <Text style={styles.notifySub}>
+            {notifyBusy
+              ? '알림 시간을 계산하고 있어요…'
+              : notifyEnabled
+                ? notifyCount > 0
+                  ? `${notifyCount}개 예약됨 · 기기 시계 기준`
+                  : '예약할 일정이 없어요 (이미 지난 일정)'
+                : '장소 도착 10분 전에 알려드려요'}
+          </Text>
+        </View>
+        {notifyBusy
+          ? <ActivityIndicator size="small" color={COLORS.primary} />
+          : <Switch
+              value={notifyEnabled}
+              onValueChange={onToggleNotify}
+              trackColor={{ false: COLORS.border, true: COLORS.primary }}
+              thumbColor="white"
+            />}
       </View>
 
       {/* 일자 탭 */}
@@ -210,6 +242,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
   },
   enterBtnText: { color: 'white', fontSize: 12, fontWeight: '700' },
+
+  notifyRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginHorizontal: 16, marginBottom: 10,
+    backgroundColor: 'white', borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+  },
+  notifyInfo: { flex: 1, gap: 2 },
+  notifyTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  notifySub: { fontSize: 11, color: COLORS.textSub },
 
   dayTabsWrap: { maxHeight: 64, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: COLORS.border },
   dayTabs: { paddingHorizontal: 12, paddingVertical: 8, gap: 8, alignItems: 'center' },

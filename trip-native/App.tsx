@@ -12,8 +12,14 @@ import TripOverviewScreen from './components/TripOverviewScreen'
 import { fetchTravelSegments, fetchSegment } from './utils/distanceMatrix'
 import { fetchRoute, fetchAllRoutes } from './utils/directions'
 import { fetchTimeZone, type TimeZoneInfo } from './utils/timezone'
+import {
+  configureNotificationHandler, ensureNotificationPermission,
+  scheduleTripNotifications, cancelTripNotifications, countScheduledNotifications,
+} from './utils/notifications'
 import { COLORS } from './constants'
 import type { Trip, Place, TravelMode, TravelSegment, TabKey } from './types'
+
+configureNotificationHandler()
 
 export default function App() {
   const [trips, setTrips] = useState<Trip[]>([])
@@ -32,6 +38,12 @@ export default function App() {
   const routeGenRef = useRef(0)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fetchGenRef = useRef(0)
+  // 알림은 여행별로 따로 켜고 끈다. 둘 다 여행 id로 키를 잡는다.
+  const [notifyBusyIds, setNotifyBusyIds] = useState<number[]>([])
+  const [notifyCounts, setNotifyCounts] = useState<Record<number, number>>({})
+  const notifyGenRef = useRef<Record<number, number>>({})
+  // 렌더를 기다리지 않고 바로 읽어야 하는 쪽(effect)을 위한 사본
+  const notifyBusyRef = useRef<Set<number>>(new Set())
 
   useEffect(() => {
     if (!activeTrip && !overviewTrip) return
@@ -285,6 +297,12 @@ export default function App() {
 
   const handleDeleteTrip = (id: number) => {
     setTrips((prev) => prev.filter((t) => t.id !== id))
+    // 여행이 사라졌는데 알림만 남아 울리면 안 된다.
+    // 세대를 올려두면 진행 중인 예약이 끝날 때 스스로 뒷정리를 한다.
+    notifyGenRef.current[id] = (notifyGenRef.current[id] ?? 0) + 1
+    setNotifyBusy(id, false)
+    setNotifyCounts(prev => { const next = { ...prev }; delete next[id]; return next })
+    cancelTripNotifications(id).catch(() => {})
   }
 
   const handleEditTrip = (id: number, title: string, tripStartDate: string | null, tripEndDate: string | null, budgets: import('./types').BudgetItem[]) => {
@@ -329,6 +347,139 @@ export default function App() {
     setTrips(prev => prev.map(t => t.id === id ? { ...t, title, tripStartDate, tripEndDate, budgets } : t))
   }
 
+  // 일정을 고치면 예약해둔 알림이 과거 계산값으로 남는다. 알림이 켜진 여행은
+  // 시각에 영향을 주는 필드가 바뀔 때마다 다시 깐다. 여행별로 서명을 따로 들고
+  // 비교해서 (1) 관계없는 변경(제목, 예산 등)과 (2) 다른 여행의 변경에는
+  // 재예약하지 않는다.
+  const notifySigs = Object.fromEntries(
+    trips
+      .filter(t => t.notifyEnabled)
+      .map(t => [t.id, JSON.stringify([
+        t.startDate, t.tripStartDate, t.tripEndDate, t.travelMode,
+        t.places.map(p => [p.id, p.dayIndex ?? 0, p.duration, p.lat, p.lng, p.name, p.timeZoneId]),
+        t.segmentModes, t.segmentDurations,
+      ])])
+  )
+  const notifySigKey = JSON.stringify(notifySigs)
+  const notifySigRef = useRef<Record<number, string> | null>(null)
+  useEffect(() => {
+    if (!loaded) return
+    const prevSigs = notifySigRef.current
+    notifySigRef.current = notifySigs
+    // 첫 렌더에서는 기준값만 기록하고 재예약하지 않는다 (앱 켤 때마다 네트워크 호출 방지)
+    if (prevSigs === null) return
+
+    // 알림을 새로 켠 여행은 handleToggleNotify가 이미 예약했으므로 제외한다
+    // (prevSigs에 없던 id = 방금 켜진 여행)
+    const stale = trips.filter(t =>
+      t.notifyEnabled && prevSigs[t.id] !== undefined && prevSigs[t.id] !== notifySigs[t.id]
+    )
+    if (stale.length === 0) return
+
+    const timer = setTimeout(async () => {
+      for (const t of stale) {
+        try {
+          const { scheduled } = await scheduleTripNotifications(t)
+          setNotifyCounts(prev => ({ ...prev, [t.id]: scheduled }))
+        } catch { /* 다음 변경 때 다시 시도된다 */ }
+      }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [notifySigKey, loaded])
+
+  // 저장된 notifyEnabled와 OS 상태가 어긋날 수 있다(권한 회수, 앱 재설치 등).
+  // 화면에 보여줄 숫자는 OS에 실제로 걸린 것을 신뢰한다.
+  const notifyEnabledKey = trips.map(t => `${t.id}:${t.notifyEnabled ? 1 : 0}`).join(',')
+  useEffect(() => {
+    if (!loaded) return
+    let alive = true
+    // 지금 예약/취소 중인 여행은 건너뛴다. 중간 상태(아직 0개)를 읽어서
+    // 방금 계산한 숫자를 덮어쓰면 안 된다.
+    const targets = trips.filter(t => t.notifyEnabled && !notifyBusyRef.current.has(t.id))
+    Promise.all(targets.map(async t => [t.id, await countScheduledNotifications(t.id)] as const))
+      .then(pairs => { if (alive) setNotifyCounts(prev => ({ ...prev, ...Object.fromEntries(pairs) })) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [loaded, notifyEnabledKey])
+
+  const setNotifyBusy = useCallback((id: number, busy: boolean) => {
+    if (busy) notifyBusyRef.current.add(id)
+    else notifyBusyRef.current.delete(id)
+    setNotifyBusyIds(prev => busy ? [...new Set([...prev, id])] : prev.filter(x => x !== id))
+  }, [])
+
+  const handleToggleNotify = useCallback(async (tripId: number, enabled: boolean) => {
+    // 토글이 빠르게 번갈아 눌릴 때 늦게 끝난 호출이 결과를 덮어쓰지 않도록
+    const gen = (notifyGenRef.current[tripId] ?? 0) + 1
+    notifyGenRef.current[tripId] = gen
+    const isStale = () => notifyGenRef.current[tripId] !== gen
+
+    const persist = (on: boolean) => {
+      setTrips(prev => prev.map(t => t.id === tripId ? { ...t, notifyEnabled: on } : t))
+      setOverviewTrip(prev => prev && prev.id === tripId ? { ...prev, notifyEnabled: on } : prev)
+    }
+
+    if (!enabled) {
+      persist(false)
+      setNotifyCounts(prev => ({ ...prev, [tripId]: 0 }))
+      setNotifyBusy(tripId, false)
+      await cancelTripNotifications(tripId).catch(() => {})
+      return
+    }
+
+    const trip = trips.find(t => t.id === tripId)
+    if (!trip) return
+    if (trip.places.length === 0) {
+      Alert.alert('일정이 비어 있어요', '장소를 먼저 추가해주세요.')
+      return
+    }
+
+    const granted = await ensureNotificationPermission().catch(() => false)
+    if (!granted) {
+      Alert.alert('알림 권한이 필요해요', '설정 → 구르미 → 알림에서 권한을 켜주세요.')
+      return
+    }
+    if (isStale()) return
+
+    persist(true)
+    setNotifyBusy(tripId, true)
+    try {
+      const { scheduled, skippedPast, droppedOverLimit } = await scheduleTripNotifications(trip)
+      // 예약하는 동안 껐거나 여행을 지웠다면, 방금 깐 알림을 되돌린다
+      if (isStale()) {
+        await cancelTripNotifications(tripId).catch(() => {})
+        return
+      }
+      setNotifyCounts(prev => ({ ...prev, [tripId]: scheduled }))
+      if (scheduled === 0) {
+        Alert.alert(
+          '예약할 알림이 없어요',
+          skippedPast > 0
+            ? `일정 ${skippedPast}개가 모두 지난 시각이에요.`
+            : '알림을 걸 일정을 찾지 못했어요.'
+        )
+      } else {
+        const notes = [
+          skippedPast > 0 ? `이미 지난 일정 ${skippedPast}개는 건너뛰었어요.` : null,
+          droppedOverLimit > 0 ? `기기 한도 때문에 먼 일정 ${droppedOverLimit}개는 제외했어요.` : null,
+        ].filter(Boolean)
+        if (notes.length > 0) {
+          Alert.alert('알림 설정 완료', [`${scheduled}개 예약했어요.`, ...notes].join('\n'))
+        }
+      }
+    } catch {
+      if (!isStale()) {
+        persist(false)
+        setNotifyCounts(prev => ({ ...prev, [tripId]: 0 }))
+        Alert.alert('알림 설정 실패', '잠시 후 다시 시도해주세요.')
+      }
+    } finally {
+      // 세대가 바뀌었다면 뒤에 들어온 호출이 busy를 관리한다.
+      // 단, 끄기/삭제로 세대가 올라간 경우엔 그쪽에서 이미 내려놨다.
+      if (!isStale()) setNotifyBusy(tripId, false)
+    }
+  }, [trips, setNotifyBusy])
+
   const handleSelectTrip = (trip: Trip) => {
     setActiveTrip(null)
     setOverviewTrip(trip)
@@ -361,6 +512,9 @@ export default function App() {
             onAdd={handleAddTrip}
             onEdit={handleEditTrip}
             onDelete={handleDeleteTrip}
+            notifyBusyIds={notifyBusyIds}
+            notifyCounts={notifyCounts}
+            onToggleNotify={handleToggleNotify}
           />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -376,6 +530,10 @@ export default function App() {
             trip={overviewTrip}
             onEnter={(dayIndex) => handleEnterTrip(overviewTrip, dayIndex)}
             onBack={() => setOverviewTrip(null)}
+            notifyEnabled={overviewTrip.notifyEnabled ?? false}
+            notifyBusy={notifyBusyIds.includes(overviewTrip.id)}
+            notifyCount={notifyCounts[overviewTrip.id] ?? 0}
+            onToggleNotify={(enabled) => handleToggleNotify(overviewTrip.id, enabled)}
           />
         </SafeAreaView>
       </SafeAreaProvider>
