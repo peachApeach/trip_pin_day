@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Switch, ActivityIndicator } from 'react-native'
 import MapView, { Polyline } from 'react-native-maps'
 import { COLORS, PLACE_COLORS } from '../constants'
@@ -47,6 +47,13 @@ export default function TripOverviewScreen({
   const dayOrderOf = (place: Place) =>
     trip.places.filter(p => (p.dayIndex ?? 0) === (place.dayIndex ?? 0)).indexOf(place) + 1
 
+  // fitToCoordinates는 지도가 준비된 뒤에만 먹는다. 첫 화면에서 한눈에
+  // 들어오게 맞추려면 onMapReady를 기다려야 한다.
+  const [mapReady, setMapReady] = useState(false)
+
+  /** 장소가 한 곳뿐이면 감쌀 영역이 없어서 적당한 줌으로 내려앉힌다. */
+  const SINGLE_DELTA = 0.02
+
   const initialRegion = trip.places.length > 0 ? {
     latitude: trip.places.reduce((s, p) => s + p.lat, 0) / trip.places.length,
     longitude: trip.places.reduce((s, p) => s + p.lng, 0) / trip.places.length,
@@ -57,14 +64,34 @@ export default function TripOverviewScreen({
     latitudeDelta: 0.1, longitudeDelta: 0.1,
   }
 
-  const handleSelectDay = (day: number | null) => {
-    setSelectedDay(day)
-    const places = day === null ? trip.places : trip.places.filter(p => (p.dayIndex ?? 0) === day)
-    if (places.length === 0) return
-    const lat = places.reduce((s, p) => s + p.lat, 0) / places.length
-    const lng = places.reduce((s, p) => s + p.lng, 0) / places.length
-    mapRef.current?.animateToRegion({ latitude: lat, longitude: lng, latitudeDelta: 0.06, longitudeDelta: 0.06 }, 400)
+  /** 넘겨받은 장소 전체가 한 화면에 들어오게 카메라를 맞춘다. */
+  const fitTo = (places: Place[]) => {
+    if (!mapReady || places.length === 0) return
+    const coords = places.map(p => ({ latitude: p.lat, longitude: p.lng }))
+    if (coords.length === 1) {
+      mapRef.current?.animateToRegion(
+        { ...coords[0], latitudeDelta: SINGLE_DELTA, longitudeDelta: SINGLE_DELTA }, 400)
+      return
+    }
+    // 핀(27x36dp)은 anchor가 아래 끝이라 좌표 위로 36dp 솟고 좌우로 ±14dp
+    // 번진다. 지도가 260dp뿐이라 그만큼만 비우고 더 주지 않는다 — 여백이
+    // 크면 정작 핀이 들어갈 자리가 좁아져서 더 멀리 잡힌다.
+    mapRef.current?.fitToCoordinates(coords, {
+      edgePadding: { top: 44, right: 24, bottom: 16, left: 24 },
+      animated: true,
+    })
   }
+
+  // 들어온 직후 전체 일정이 한눈에 보이게. 날짜를 고른 상태면 그 날에 맞춘다.
+  // 일정 상세에서 장소를 추가하고 돌아오면 이 화면은 그대로 있고 trip만
+  // 갱신되므로, 좌표 목록이 바뀌었을 때도 다시 맞춘다.
+  // selectedDay를 키에 넣는다 — 날짜별 장소가 같은 좌표일 수 있어서
+  // (Day1·Day2 숙소가 같은 호텔) 좌표만으로는 탭 전환을 못 알아챈다.
+  const fitKey = `${selectedDay}:${visiblePlaces.map(p => `${p.lat},${p.lng}`).join('|')}`
+  useEffect(() => { fitTo(visiblePlaces) }, [mapReady, fitKey])
+
+  // 카메라는 fitKey 이펙트가 맞춘다 — 여기서 또 부르면 애니메이션이 겹친다
+  const handleSelectDay = (day: number | null) => setSelectedDay(day)
 
   return (
     <View style={styles.container}>
@@ -154,6 +181,7 @@ export default function TripOverviewScreen({
           ref={mapRef}
           style={StyleSheet.absoluteFillObject}
           initialRegion={initialRegion}
+          onMapReady={() => setMapReady(true)}
           rotateEnabled={false}
           pitchEnabled={false}
         >
