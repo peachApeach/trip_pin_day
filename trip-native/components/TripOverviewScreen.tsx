@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Switch, ActivityIndicator } from 'react-native'
-import MapView, { Marker, Polyline } from 'react-native-maps'
+import MapView, { Polyline } from 'react-native-maps'
 import { COLORS, PLACE_COLORS } from '../constants'
 import Icon from './Icon'
+import MapPin from './MapPin'
 import type { Trip, Place } from '../types'
 
 interface Props {
@@ -41,6 +42,10 @@ export default function TripOverviewScreen({
   const visiblePlaces = selectedDay === null
     ? trip.places
     : trip.places.filter(p => (p.dayIndex ?? 0) === selectedDay)
+
+  /** 그 장소가 속한 날에서 몇 번째인지. 핀에 찍히는 번호다. */
+  const dayOrderOf = (place: Place) =>
+    trip.places.filter(p => (p.dayIndex ?? 0) === (place.dayIndex ?? 0)).indexOf(place) + 1
 
   const initialRegion = trip.places.length > 0 ? {
     latitude: trip.places.reduce((s, p) => s + p.lat, 0) / trip.places.length,
@@ -160,34 +165,16 @@ export default function TripOverviewScreen({
               lineDashPattern={[6, 4]}
             />
           )}
-          {visiblePlaces.map((place, idx) => {
-            const globalIdx = trip.places.indexOf(place)
-            const dotColor = PLACE_COLORS[globalIdx % PLACE_COLORS.length].dot
-            return (
-              <Marker
-                key={`${place.id}`}
-                coordinate={{ latitude: place.lat, longitude: place.lng }}
-                tracksViewChanges={true}
-                anchor={{ x: 0.5, y: 1 }}
-              >
-                <View collapsable={false} style={{ alignItems: 'center' }}>
-                  <View collapsable={false} style={{
-                    width: 26, height: 26, borderRadius: 13,
-                    backgroundColor: dotColor,
-                    alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Text style={{ color: 'white', fontSize: 10, fontWeight: '800' }}>{globalIdx + 1}</Text>
-                  </View>
-                  <View style={{
-                    width: 0, height: 0,
-                    borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8,
-                    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-                    borderTopColor: dotColor,
-                  }} />
-                </View>
-              </Marker>
-            )
-          })}
+          {/* 핀 번호는 그 날의 방문 순서다. 아래 목록은 여행 전체 순번을 쓰므로
+              '전체' 탭에서는 둘이 다를 수 있다 — 핀은 날짜별로 읽는 게 맞다. */}
+          {visiblePlaces.map((place) => (
+            <MapPin
+              key={place.id}
+              coordinate={{ latitude: place.lat, longitude: place.lng }}
+              order={dayOrderOf(place)}
+              onPress={() => onEnter(place.dayIndex ?? 0)}
+            />
+          ))}
         </MapView>
 
         {visiblePlaces.length === 0 && (
