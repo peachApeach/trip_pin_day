@@ -78,14 +78,15 @@ const act = StyleSheet.create({
     position: 'absolute',
     right: '100%', top: '35%',
     backgroundColor: COLORS.primary,
-    paddingVertical: 14, paddingHorizontal: 9,
-    borderTopLeftRadius: 12, borderBottomLeftRadius: 12,
-    alignItems: 'center', gap: 4,
+    // 폭 36dp (글자 12 + 좌우 패딩 12씩). 27dp일 때 헛누르는 일이 많았다.
+    paddingVertical: 16, paddingHorizontal: 12,
+    borderTopLeftRadius: 14, borderBottomLeftRadius: 14,
+    alignItems: 'center', gap: 5,
     shadowColor: COLORS.text, shadowOffset: { width: -2, height: 0 },
     shadowOpacity: 0.15, shadowRadius: 6, elevation: 6,
   },
-  tabIcon: { fontSize: 16, color: 'white', fontWeight: '800' },
-  tabLabel: { fontSize: 9, color: 'white', fontWeight: '700', textAlign: 'center', lineHeight: 13 },
+  tabIcon: { fontSize: 17, color: 'white', fontWeight: '800' },
+  tabLabel: { fontSize: 12, color: 'white', fontWeight: '700', textAlign: 'center', lineHeight: 15 },
   panel: {
     position: 'absolute',
     top: 0, bottom: 0,
@@ -821,8 +822,15 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
 
       {/* 사이드 액티비티 패널 (손잡이 포함) */}
       <View style={[act.panel, showActivities ? act.panelOpen : act.panelClosed]}>
-        {/* 손잡이 — 패널 왼쪽에 붙음 */}
-        <TouchableOpacity style={act.tab} onPress={handleToggleActivities} activeOpacity={0.8}>
+        {/* 손잡이 — 패널 왼쪽에 붙음.
+            보이는 폭은 36dp지만 hitSlop으로 터치는 48dp를 넘게 잡는다.
+            폭을 더 키우면 닫힌 상태에서 지도를 그만큼 더 가린다. */}
+        <TouchableOpacity
+          style={act.tab}
+          onPress={handleToggleActivities}
+          activeOpacity={0.8}
+          hitSlop={{ top: 8, bottom: 8, left: 14, right: 6 }}
+        >
           <Text style={act.tabIcon}>{showActivities ? '›' : '‹'}</Text>
           <Text style={act.tabLabel}>{'즐\n길\n거\n리'}</Text>
         </TouchableOpacity>
