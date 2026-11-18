@@ -545,6 +545,8 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
   const handlePoiClick = (e: PoiClickEvent) => {
     if (showModal) return
     setShowSuggestions(false)
+    // 지도 탭과 같게 — 첫 탭은 패널을 치우는 데만 쓴다
+    if (showActivities) { setShowActivities(false); return }
     const { coordinate, name, placeId } = e.nativeEvent
     setPreviewMarker({ lat: coordinate.latitude, lng: coordinate.longitude, name, address: '' })
     setDetailLoading(true)
@@ -564,6 +566,10 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
     if (showModal) return
     setShowSuggestions(false)
     if (markerPressedRef.current) { markerPressedRef.current = false; return }
+    // 즐길거리가 열려 있으면 패널을 닫는 것으로 끝낸다. 패널이 지도를 72%만
+    // 덮어서 왼쪽을 누르면 지도 탭이 들어오는데, 장소까지 집어버리면
+    // 패널을 치우려던 손짓이 엉뚱한 미리보기를 띄운다.
+    if (showActivities) { setShowActivities(false); return }
     onMarkerPress(0)
     setPlaceDetail(null)
     const { latitude, longitude } = e.nativeEvent.coordinate
@@ -642,6 +648,9 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
                 markerPressedRef.current = true
                 setTimeout(() => { markerPressedRef.current = false }, 300)
                 geocodeIdRef.current++
+                // 빈 지도를 누른 것과 달리 핀을 콕 집었으면 그 장소를 보려는
+                // 것이므로, 패널만 닫고 끝내지 않고 선택까지 진행한다.
+                setShowActivities(false)
                 onMarkerPress(place.id)
                 setPreviewMarker(null)
               }}
