@@ -34,9 +34,13 @@ TABLE = os.path.join(ROOT, 'components', 'pinAssets.ts')
 COLORS = ['pink', 'mint', 'yellow', 'lavender', 'blue']
 STATES = ['default', 'selected']
 
-# 시안 치수. 선택 시 커지는 것도 이미지 크기로 표현한다 — 뷰를 안 쓰므로
-# 크기가 바뀌어도 잘릴 일이 없다.
-HEIGHT_DP = {'default': 45, 'selected': 55}
+# 선택 시 커지는 것도 이미지 크기로 표현한다 — 뷰를 안 쓰므로 크기가
+# 바뀌어도 잘릴 일이 없다.
+#
+# 시안(§5)은 36x45 / 44x55dp지만 그대로 쓰면 개요 화면의 260dp 지도에서
+# 핀이 지도 높이의 17%를 먹어 너무 크다. 시안의 가로 치수(36/44)를 높이로
+# 쓰고 선택 시 비율(55/45)은 유지했다.
+HEIGHT_DP = {'default': 36, 'selected': 44}
 DENSITIES = [1, 2, 3]
 
 # 일정 순서 숫자를 구워둘 범위. 하루 일정이 이보다 많으면 숫자 없는 몸통으로
