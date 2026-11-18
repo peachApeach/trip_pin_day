@@ -1,55 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
-import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native'
 import { Marker } from 'react-native-maps'
-import { COLORS } from '../constants'
-import Icon, { type IconName } from './Icon'
+import { BODY, MAX_ORDER, NUMBERED, type PinColor } from './pinAssets'
+
+export type { PinColor }
 
 /**
- * 지도 핀. 이미지에는 몸통만 있고 숫자·아이콘은 이 컴포넌트가 위에 올린다.
+ * 지도 핀.
  *
- * 좌표계: 원본 PNG는 256×320이고 안에서
- *   - 전구(원형) 중심이 세로 32.2% 지점
- *   - 꼬리 끝이 세로 91.6% 지점
- * 에 있다. 숫자를 전구 중심에, Marker anchor를 꼬리 끝에 맞추는 데 쓴다.
- * 기본형·선택형이 같은 캔버스를 쓰므로 두 상태의 꼬리 위치가 어긋나지 않는다.
+ * Marker에 자식 뷰를 두지 않고 image 속성만 쓴다. 안드로이드에서 자식 뷰가
+ * 있으면 MapMarker가 그 뷰를 "레이아웃으로 측정된 크기"의 비트맵에 draw()해서
+ * 올리는데(MapMarker.createDrawable), 측정값이 shadow node에서 비동기로 오기
+ * 때문에 아직 안 왔으면 100x100 물리픽셀로 떨어져 오른쪽·아래가 직각으로
+ * 잘린다. 자식이 없으면 getIcon()이 비트맵을 그대로 돌려줘서(MapMarker:466)
+ * 그 캡처 경로를 아예 타지 않는다 — tracksViewChanges도 무의미해진다
+ * (MapMarker:261에서 hasCustomMarkerView와 AND로 묶여 있다).
+ *
+ * 그래서 순서 숫자와 카테고리 아이콘은 빌드 시점에 PNG로 구워둔다.
+ * scripts/generate-pin-assets.py 가 만들고 pinAssets.ts 가 목록이다.
  */
-const PIN_ASPECT = 256 / 320
-const BULB_CENTER_Y = 103.5 / 320
-const TIP_Y = 293 / 320
-
-/** 선택 핀 기준 크기. 기본 핀은 여기에 DEFAULT_SCALE을 곱한 크기로 보인다. */
-const SELECTED_H = 55
-const SELECTED_W = Math.round(SELECTED_H * PIN_ASPECT) // 44
-const DEFAULT_H = 45
-const DEFAULT_SCALE = DEFAULT_H / SELECTED_H
-
-/** 확대/축소 애니메이션 */
-const GROW_MS = 180
-
-export type PinColor = 'pink' | 'mint' | 'yellow' | 'lavender' | 'blue'
-
-const BODIES: Record<PinColor, { default: number; selected: number }> = {
-  pink: {
-    default: require('../assets/map-pins/pin_pink_default.png'),
-    selected: require('../assets/map-pins/pin_pink_selected.png'),
-  },
-  mint: {
-    default: require('../assets/map-pins/pin_mint_default.png'),
-    selected: require('../assets/map-pins/pin_mint_selected.png'),
-  },
-  yellow: {
-    default: require('../assets/map-pins/pin_yellow_default.png'),
-    selected: require('../assets/map-pins/pin_yellow_selected.png'),
-  },
-  lavender: {
-    default: require('../assets/map-pins/pin_lavender_default.png'),
-    selected: require('../assets/map-pins/pin_lavender_selected.png'),
-  },
-  blue: {
-    default: require('../assets/map-pins/pin_blue_default.png'),
-    selected: require('../assets/map-pins/pin_blue_selected.png'),
-  },
-}
 
 export type PlaceCategory = 'food' | 'cafe' | 'sight' | 'lodging' | 'shopping' | 'default'
 
@@ -84,32 +51,22 @@ const CATEGORY_COLOR: Record<PlaceCategory, PinColor> = {
   shopping: 'blue',
 }
 
-/**
- * 카테고리 아이콘. 시안 아이콘 세트에 식기·커피·카메라·쇼핑백이 없어서
- * 지금은 숙소(home)만 대응된다. 나머지는 몸통만 보여준다 —
- * 이모지로 때우면 핀마다 모양이 달라지고 OS별로도 달라진다.
- */
-const CATEGORY_ICON: Partial<Record<PlaceCategory, IconName>> = {
-  lodging: 'home',
-}
-
 export function pinColorFor(category: PlaceCategory): PinColor {
   return CATEGORY_COLOR[category]
 }
 
 /**
- * 안드로이드는 마커를 비트맵으로 캡처해서 그린다. tracksViewChanges를 계속
- * 켜두면 매 프레임 다시 캡처해 깜빡이고 느려지므로, 모양이 바뀐 직후
- * 잠깐만 켜고 되돌린다.
+ * 순서가 있으면 숫자 핀, 없으면 카테고리 색 몸통.
+ * 숫자 핀은 핑크만 구워져 있다 — 저장된 장소에는 카테고리 정보가 없어서
+ * 순서 핀은 항상 핑크이고, 색깔별로 1..30을 다 만들면 에셋이 다섯 배가 된다.
  */
-function useTrackWindow(trigger: unknown, ms: number): boolean {
-  const [tracking, setTracking] = useState(true)
-  useEffect(() => {
-    setTracking(true)
-    const timer = setTimeout(() => setTracking(false), ms)
-    return () => clearTimeout(timer)
-  }, [trigger, ms])
-  return tracking
+function sourceFor(category: PlaceCategory, order: number | undefined, selected: boolean) {
+  const state = selected ? 'selected' : 'default'
+  if (order != null && order >= 1 && order <= MAX_ORDER) {
+    return NUMBERED[state][order]
+  }
+  // MAX_ORDER를 넘는 일정은 숫자 없이 몸통만 보여준다 (잘린 핀보다는 낫다)
+  return BODY[pinColorFor(category)][state]
 }
 
 interface Props {
@@ -126,72 +83,17 @@ interface Props {
 export default function MapPin({
   coordinate, order, category = 'default', selected = false, onPress, zIndex,
 }: Props) {
-  const body = BODIES[pinColorFor(category)][selected ? 'selected' : 'default']
-  const icon = order == null ? CATEGORY_ICON[category] : undefined
-
-  const grow = useRef(new Animated.Value(selected ? 1 : 0)).current
-  useEffect(() => {
-    Animated.timing(grow, {
-      toValue: selected ? 1 : 0,
-      duration: GROW_MS,
-      easing: Easing.out(Easing.quad),
-      // 마커는 네이티브 드라이버로 돌리면 안드로이드에서 비트맵이
-      // 갱신되지 않는다. JS 드라이버 + tracksViewChanges 조합을 쓴다.
-      useNativeDriver: false,
-    }).start()
-  }, [selected, grow])
-
-  // 확대 애니메이션이 끝날 때까지, 그리고 순서가 바뀌어 숫자가 달라졌을 때
-  // 다시 캡처해야 안드로이드에서 변화가 화면에 반영된다.
-  const tracksViewChanges = useTrackWindow(`${selected}:${order}`, GROW_MS + 120)
-
   return (
     <Marker
       coordinate={coordinate}
-      // 꼬리 끝이 좌표를 가리킨다. 꼬리를 기준으로 확대하므로 두 상태 모두 같은 점.
-      anchor={{ x: 0.5, y: TIP_Y }}
-      tracksViewChanges={tracksViewChanges}
+      image={sourceFor(category, order, selected)}
+      // 이미지 아래 끝이 꼬리 끝이다 (생성기가 꼬리 마지막 픽셀에 맞춰 잘라낸다)
+      anchor={{ x: 0.5, y: 1 }}
+      // 자식 뷰가 없어 캡처가 일어나지 않지만, 기본값(true)이면 안드로이드가
+      // 매 프레임 마커를 갱신하려 든다. 꺼두는 게 맞다.
+      tracksViewChanges={false}
       zIndex={zIndex}
       onPress={onPress}
-    >
-      {/* 바깥 래퍼는 선택 크기로 고정 — 커질 때 비트맵이 잘리지 않는다 */}
-      <View collapsable={false} style={styles.box}>
-        <Animated.View
-          collapsable={false}
-          style={[
-            styles.box,
-            {
-              transform: [{
-                scale: grow.interpolate({ inputRange: [0, 1], outputRange: [DEFAULT_SCALE, 1] }),
-              }],
-              // 꼬리 끝을 축으로 키워서 가리키는 좌표가 흔들리지 않게 한다
-              transformOrigin: ['50%', `${TIP_Y * 100}%`, 0],
-            },
-          ]}
-        >
-          <Image source={body} style={styles.body} resizeMode="contain" fadeDuration={0} />
-          <View style={styles.glyph} pointerEvents="none">
-            {order != null ? (
-              <Text style={styles.order} allowFontScaling={false}>{order}</Text>
-            ) : icon ? (
-              <Icon name={icon} size={17} color={COLORS.text} />
-            ) : null}
-          </View>
-        </Animated.View>
-      </View>
-    </Marker>
+    />
   )
 }
-
-const styles = StyleSheet.create({
-  box: { width: SELECTED_W, height: SELECTED_H },
-  body: StyleSheet.absoluteFillObject,
-  // 높이를 전구 중심의 두 배로 잡고 가운데 정렬하면 글자가 전구 정중앙에 온다
-  glyph: {
-    position: 'absolute', left: 0, right: 0, top: 0,
-    height: SELECTED_H * BULB_CENTER_Y * 2,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  // 폭을 주지 않아 두 자릿수도 잘리지 않는다
-  order: { fontSize: 16, fontWeight: '700', color: COLORS.text, includeFontPadding: false },
-})
