@@ -9,6 +9,7 @@ import MapScreen from './components/MapScreen'
 import PlanScreen from './components/PlanScreen'
 import TripListScreen from './components/TripListScreen'
 import TripOverviewScreen from './components/TripOverviewScreen'
+import DayPicker from './components/DayPicker'
 import Icon, { type IconName } from './components/Icon'
 import { fetchTravelSegments, fetchSegment } from './utils/distanceMatrix'
 import { fetchRoute, fetchAllRoutes } from './utils/directions'
@@ -32,6 +33,7 @@ export default function App() {
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
   const [overviewTrip, setOverviewTrip] = useState<Trip | null>(null)
   const [activeDayIndex, setActiveDayIndex] = useState<number>(0)
+  const [showDayPicker, setShowDayPicker] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState<TabKey>('map')
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
@@ -347,6 +349,7 @@ export default function App() {
     }
     setTrips((prev) => [...prev, newTrip])
     setActiveTrip(newTrip)
+    setActiveDayIndex(0)
     setActiveTab('map')
     setSelectedPlaceId(null)
     setTravelSegments([])
@@ -600,12 +603,14 @@ export default function App() {
 
   const totalDays = tripTotalDays(activeTrip.tripStartDate, activeTrip.tripEndDate)
 
-  function formatDayDate(dayIdx: number) {
-    if (!activeTrip!.tripStartDate) return `Day ${dayIdx + 1}`
-    const d = new Date(activeTrip!.tripStartDate)
-    d.setDate(d.getDate() + dayIdx)
-    return `${d.getMonth() + 1}/${d.getDate()}`
-  }
+  const dayLabels = Array.from({ length: totalDays }, (_, day) => {
+    const label = `Day ${day + 1}`
+    if (!activeTrip.tripStartDate) return label
+    const date = new Date(activeTrip.tripStartDate)
+    if (Number.isNaN(date.getTime())) return label
+    date.setDate(date.getDate() + day)
+    return `${label} · ${date.getMonth() + 1}/${date.getDate()}`
+  })
 
   const TABS = [
     { key: 'plan' as TabKey, icon: 'calendar' as IconName, label: `일정 (${places.length})` },
@@ -614,37 +619,38 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
 
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => {
-            setOverviewTrip(trips.find(t => t.id === activeTrip!.id) ?? null)
-            setActiveTrip(null)
-          }}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="여행 개요로 돌아가기"
+            onPress={() => {
+              setOverviewTrip(trips.find(t => t.id === activeTrip.id) ?? null)
+              setActiveTrip(null)
+            }}
+          >
             <Text style={styles.backIcon}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.tripTitle} numberOfLines={1}>{activeTrip.title}</Text>
-          <View style={styles.dayNav}>
+          {totalDays > 1 ? (
             <TouchableOpacity
-              style={[styles.dayNavBtn, activeDayIndex === 0 && styles.dayNavBtnDisabled]}
-              onPress={() => handleDayChange(activeDayIndex - 1)}
-              disabled={activeDayIndex === 0}
+              style={styles.dayNav}
+              accessibilityRole="button"
+              accessibilityLabel={`날짜 선택, ${dayLabels[activeDayIndex]}`}
+              accessibilityState={{ expanded: showDayPicker }}
+              onPress={() => setShowDayPicker(true)}
             >
-              <Text style={styles.dayNavArrow}>‹</Text>
+              <Text style={styles.dayNavLabel}>{dayLabels[activeDayIndex]}</Text>
+              <Text style={styles.dayNavLabel} accessible={false}>▾</Text>
             </TouchableOpacity>
-            <View style={styles.dayNavLabel}>
-              <Text style={styles.dayNavDay}>Day {activeDayIndex + 1}</Text>
-              <Text style={styles.dayNavDate}>{formatDayDate(activeDayIndex)}</Text>
+          ) : (
+            <View style={styles.dayNav}>
+              <Text style={styles.dayNavLabel}>{dayLabels[0]}</Text>
             </View>
-            <TouchableOpacity
-              style={[styles.dayNavBtn, activeDayIndex === totalDays - 1 && styles.dayNavBtnDisabled]}
-              onPress={() => handleDayChange(activeDayIndex + 1)}
-              disabled={activeDayIndex === totalDays - 1}
-            >
-              <Text style={styles.dayNavArrow}>›</Text>
-            </TouchableOpacity>
-          </View>
+          )}
         </View>
 
         <View style={styles.content}>
@@ -665,7 +671,7 @@ export default function App() {
               onRemove={handleRemove}
             />
             {places.length === 0 && (
-              <View style={styles.mapHint}>
+              <View style={styles.mapHint} pointerEvents="none">
                 <Icon name="pin" size={14} color={COLORS.primary} />
                 <Text style={styles.mapHintText}>지도를 탭해서 장소를 추가해요</Text>
               </View>
@@ -680,9 +686,7 @@ export default function App() {
             >
               <PlanScreen
                 places={places}
-                dayLabels={Array.from({ length: totalDays }, (_, day) =>
-                  activeTrip.tripStartDate ? `Day ${day + 1} · ${formatDayDate(day)}` : `Day ${day + 1}`
-                )}
+                dayLabels={dayLabels}
                 selectedPlaceId={selectedPlaceId}
                 onSelect={setSelectedPlaceId}
                 onRemove={handleRemove}
@@ -725,13 +729,15 @@ export default function App() {
             <TouchableOpacity
               key={tab.key}
               style={styles.tabItem}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: activeTab === tab.key }}
               onPress={() => setActiveTab(tab.key)}
               activeOpacity={0.7}
             >
               <Icon
                 name={tab.icon}
                 size={22}
-                color={activeTab === tab.key ? COLORS.primary : COLORS.textSub}
+                color={activeTab === tab.key ? COLORS.primaryInk : COLORS.textSub}
               />
               <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
                 {tab.label}
@@ -740,6 +746,18 @@ export default function App() {
             </TouchableOpacity>
           ))}
         </View>
+        {showDayPicker && (
+          <DayPicker
+            title="날짜 선택"
+            dayLabels={dayLabels}
+            selectedDay={activeDayIndex}
+            onClose={() => setShowDayPicker(false)}
+            onSelect={dayIndex => {
+              setShowDayPicker(false)
+              if (dayIndex !== activeDayIndex) handleDayChange(dayIndex)
+            }}
+          />
+        )}
       </SafeAreaView>
     </SafeAreaProvider>
   )
@@ -788,22 +806,18 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
   backBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 48, height: 48, borderRadius: 24,
     backgroundColor: COLORS.primaryLight,
     justifyContent: 'center', alignItems: 'center',
   },
-  backIcon: { fontSize: 22, color: COLORS.primary, fontWeight: '700', lineHeight: 26 },
+  backIcon: { fontSize: 24, color: COLORS.primaryInk, fontWeight: '700', lineHeight: 28 },
   tripTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: COLORS.text, letterSpacing: -0.3 },
   dayNav: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.primaryLight, borderRadius: 20, paddingHorizontal: 4,
+    minHeight: 48, paddingHorizontal: 12, paddingVertical: 8, gap: 6,
+    flexDirection: 'row', alignItems: 'center', flexShrink: 1,
+    backgroundColor: COLORS.primaryLight, borderRadius: 24,
   },
-  dayNavBtn: { padding: 6 },
-  dayNavBtnDisabled: { opacity: 0.3 },
-  dayNavArrow: { fontSize: 18, color: COLORS.primary, fontWeight: '700' },
-  dayNavLabel: { alignItems: 'center', paddingHorizontal: 4 },
-  dayNavDay: { fontSize: 12, fontWeight: '800', color: COLORS.primary },
-  dayNavDate: { fontSize: 10, color: COLORS.primary, opacity: 0.7 },
+  dayNavLabel: { fontSize: 13, fontWeight: '800', color: COLORS.primaryInk, flexShrink: 1 },
   content: { flex: 1 },
   mapWrapper: {
     flex: 1, position: 'relative',
@@ -826,7 +840,7 @@ const styles = StyleSheet.create({
     borderRadius: 12, paddingLeft: 14, paddingRight: 4, backgroundColor: COLORS.text,
   },
   undoMessage: { flex: 1, color: 'white', fontSize: 13 },
-  undoButton: { justifyContent: 'center', minHeight: 44, paddingHorizontal: 12 },
+  undoButton: { justifyContent: 'center', minHeight: 48, paddingHorizontal: 12 },
   undoAction: { color: COLORS.primaryLight, fontSize: 13, fontWeight: '800' },
   tabBar: {
     flexDirection: 'row', backgroundColor: COLORS.card,
@@ -835,8 +849,8 @@ const styles = StyleSheet.create({
     shadowColor: COLORS.text, shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 8,
   },
-  tabItem: { flex: 1, alignItems: 'center', paddingVertical: 4, gap: 2 },
+  tabItem: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, gap: 2 },
   tabLabel: { fontSize: 11, color: COLORS.textSub, fontWeight: '500' },
-  tabLabelActive: { color: COLORS.primary, fontWeight: '700' },
+  tabLabelActive: { color: COLORS.primaryInk, fontWeight: '700' },
   tabDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: COLORS.primary, marginTop: 1 },
 })

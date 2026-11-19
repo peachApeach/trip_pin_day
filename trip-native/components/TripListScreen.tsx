@@ -136,7 +136,7 @@ export default function TripListScreen({
       <View style={styles.header}>
         <Text style={styles.headerTitle}>내 여행</Text>
         <TouchableOpacity style={styles.addBtn} onPress={() => setAdding(true)}>
-          <Icon name="plus" size={13} color="white" />
+          <Icon name="plus" size={13} color={COLORS.text} />
           <Text style={styles.addBtnText}>여행 추가</Text>
         </TouchableOpacity>
       </View>
@@ -147,7 +147,7 @@ export default function TripListScreen({
           <TextInput
             style={styles.addCardInput}
             placeholder="예: 제주도 여행"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={COLORS.textSub}
             value={title}
             onChangeText={setTitle}
             autoFocus
@@ -212,7 +212,7 @@ export default function TripListScreen({
                 <TextInput
                   style={styles.budgetInput}
                   placeholder="금액"
-                  placeholderTextColor={COLORS.textMuted}
+                  placeholderTextColor={COLORS.textSub}
                   keyboardType="numeric"
                   value={b.amount > 0 ? String(b.amount) : ''}
                   onChangeText={(v) => updateBudgetAmount(i, v)}
@@ -258,7 +258,7 @@ export default function TripListScreen({
           <Text style={styles.emptyTitle}>여행 계획이 없어요</Text>
           <Text style={styles.emptyDesc}>위의 버튼을 눌러 첫 여행을 만들어보세요!</Text>
           <TouchableOpacity style={styles.emptyBtn} onPress={() => setAdding(true)}>
-            <Icon name="plus" size={13} color="white" />
+            <Icon name="plus" size={13} color={COLORS.text} />
             <Text style={styles.emptyBtnText}>여행 추가하기</Text>
           </TouchableOpacity>
         </View>
@@ -300,7 +300,7 @@ export default function TripListScreen({
                     {notifyOn && notifyCount > 0 && (
                       <>
                         <Icon name="notification" size={12} color={COLORS.primary} style={styles.metaGap} />
-                        <Text style={[styles.cardMetaText, { color: COLORS.primary }]}>{notifyCount}</Text>
+                        <Text style={[styles.cardMetaText, { color: COLORS.primaryInk }]}>{notifyCount}</Text>
                       </>
                     )}
                   </View>
@@ -323,7 +323,6 @@ export default function TripListScreen({
                     <TouchableOpacity
                       style={[styles.cardNotify, notifyOn && styles.cardNotifyOn]}
                       onPress={() => onToggleNotify(item.id, !notifyOn)}
-                      hitSlop={{ top: 8, bottom: 4, left: 8, right: 8 }}
                       accessibilityRole="switch"
                       accessibilityState={{ checked: notifyOn }}
                       accessibilityLabel={`${item.title} 일정 알림 ${notifyOn ? '끄기' : '켜기'}`}
@@ -331,14 +330,14 @@ export default function TripListScreen({
                       <Icon
                         name="notification"
                         size={16}
-                        color={notifyOn ? COLORS.primary : COLORS.textMuted}
+                        color={notifyOn ? COLORS.primaryInk : COLORS.textSub}
                       />
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
                     style={styles.cardMore}
                     onPress={() => setMenuId(item.id)}
-                    hitSlop={{ top: 4, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
                     accessibilityLabel={`${item.title} 더보기`}
                   >
                     <Icon name="more" size={16} color={COLORS.textSub} />
@@ -376,7 +375,7 @@ export default function TripListScreen({
               }}
             >
               <Icon name="more" size={18} color={COLORS.primary} />
-              <Text style={[styles.menuRowText, { color: COLORS.primary }]}>여행 삭제</Text>
+              <Text style={[styles.menuRowText, { color: COLORS.primaryInk }]}>여행 삭제</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -394,9 +393,9 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: '800', color: COLORS.text, letterSpacing: -0.5 },
   addBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    minHeight: 48, backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24,
   },
-  addBtnText: { color: 'white', fontSize: 13, fontWeight: '700' },
+  addBtnText: { color: COLORS.text, fontSize: 13, fontWeight: '700' },
 
   addCard: {
     marginHorizontal: 16, marginBottom: 12,
@@ -419,18 +418,18 @@ const styles = StyleSheet.create({
   dateBtnFilled: { borderColor: COLORS.mint, backgroundColor: COLORS.mintLight },
   dateBtnLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSub, marginBottom: 2 },
   dateBtnValue: { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
-  dateBtnValueFilled: { color: COLORS.mint },
+  dateBtnValueFilled: { color: COLORS.mintDark },
   dateSep: { fontSize: 16, color: COLORS.textSub },
   nightsBadge: {
     backgroundColor: COLORS.primaryLight, paddingHorizontal: 8,
     paddingVertical: 4, borderRadius: 10,
   },
-  nightsText: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
+  nightsText: { fontSize: 11, fontWeight: '700', color: COLORS.primaryInk },
   pickerDone: {
     alignSelf: 'flex-end', backgroundColor: COLORS.mint,
     paddingHorizontal: 16, paddingVertical: 6, borderRadius: 10,
   },
-  pickerDoneText: { color: 'white', fontSize: 13, fontWeight: '700' },
+  pickerDoneText: { color: COLORS.text, fontSize: 13, fontWeight: '700' },
 
   addCardButtons: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 4 },
   addCardCancel: {
@@ -440,7 +439,7 @@ const styles = StyleSheet.create({
   addCardCancelText: { fontSize: 13, color: COLORS.textSub, fontWeight: '600' },
   addCardConfirm: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 12, backgroundColor: COLORS.primary },
   addCardConfirmDisabled: { backgroundColor: COLORS.border },
-  addCardConfirmText: { fontSize: 13, color: 'white', fontWeight: '700' },
+  addCardConfirmText: { fontSize: 13, color: COLORS.text, fontWeight: '700' },
 
   list: { padding: 16, gap: 12 },
   // 시안: 썸네일 + 글 + 액션을 한 줄로. 왼쪽 색 띠는 썸네일이 역할을 대신한다.
@@ -461,16 +460,16 @@ const styles = StyleSheet.create({
   cardMetaText: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
   // 아이콘 묶음 사이를 띄운다 (장소 N곳 · 기간 · 알림)
   metaGap: { marginLeft: 7 },
-  cardBudget: { fontSize: 11, fontWeight: '600', color: COLORS.mint, marginTop: 1 },
-  cardActions: { alignItems: 'center', gap: 6 },
+  cardBudget: { fontSize: 11, fontWeight: '600', color: COLORS.mintDark, marginTop: 1 },
+  cardActions: { alignItems: 'center' },
   cardNotify: {
-    width: 30, height: 30, borderRadius: 15,
+    width: 48, height: 48, borderRadius: 24,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: COLORS.bg,
   },
   cardNotifyOn: { backgroundColor: COLORS.primaryLight },
   cardMore: {
-    width: 30, height: 30, borderRadius: 15,
+    width: 48, height: 48, borderRadius: 24,
     alignItems: 'center', justifyContent: 'center',
   },
 
@@ -499,8 +498,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight, borderRadius: 10,
     paddingHorizontal: 10, paddingVertical: 7,
   },
-  currencySymbol: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
-  currencyCode: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
+  currencySymbol: { fontSize: 13, fontWeight: '700', color: COLORS.primaryInk },
+  currencyCode: { fontSize: 11, fontWeight: '700', color: COLORS.primaryInk },
   budgetInput: {
     flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text,
     borderBottomWidth: 1.5, borderBottomColor: COLORS.primaryLight, paddingVertical: 6,
@@ -519,5 +518,5 @@ const styles = StyleSheet.create({
     marginTop: 8, backgroundColor: COLORS.primary,
     paddingHorizontal: 22, paddingVertical: 12, borderRadius: 20,
   },
-  emptyBtnText: { color: 'white', fontSize: 14, fontWeight: '700' },
+  emptyBtnText: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
 })

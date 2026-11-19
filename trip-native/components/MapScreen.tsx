@@ -79,15 +79,14 @@ const act = StyleSheet.create({
     position: 'absolute',
     right: '100%', top: '35%',
     backgroundColor: COLORS.primary,
-    // 폭 36dp (글자 12 + 좌우 패딩 12씩). 27dp일 때 헛누르는 일이 많았다.
-    paddingVertical: 16, paddingHorizontal: 12,
+    width: 48, minHeight: 48, paddingVertical: 16,
     borderTopLeftRadius: 14, borderBottomLeftRadius: 14,
     alignItems: 'center', gap: 5,
     shadowColor: COLORS.text, shadowOffset: { width: -2, height: 0 },
     shadowOpacity: 0.15, shadowRadius: 6, elevation: 6,
   },
-  tabIcon: { fontSize: 17, color: 'white', fontWeight: '800' },
-  tabLabel: { fontSize: 12, color: 'white', fontWeight: '700', textAlign: 'center', lineHeight: 15 },
+  tabIcon: { fontSize: 17, color: COLORS.text, fontWeight: '800' },
+  tabLabel: { fontSize: 12, color: COLORS.text, fontWeight: '700', textAlign: 'center', lineHeight: 15 },
   panel: {
     position: 'absolute',
     top: 0, bottom: 0,
@@ -107,7 +106,7 @@ const act = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   title: { fontSize: 15, fontWeight: '800', color: COLORS.text },
   subtitle: { fontSize: 10, color: COLORS.textSub, marginTop: 2 },
-  closeBtn: { padding: 4 },
+  closeBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   loading: { alignItems: 'center', paddingVertical: 40, gap: 12 },
   loadingText: { fontSize: 12, color: COLORS.textSub },
   list: { padding: 10, gap: 10, paddingBottom: 40 },
@@ -134,12 +133,12 @@ const act = StyleSheet.create({
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   metaRating: { fontSize: 11, fontWeight: '700', color: COLORS.rating },
   metaCount: { fontSize: 10, color: COLORS.textSub },
-  metaPrice: { fontSize: 11, fontWeight: '600', color: COLORS.mint },
+  metaPrice: { fontSize: 11, fontWeight: '600', color: COLORS.mintDark },
   klookBtn: {
     marginTop: 6, paddingVertical: 9, borderRadius: 10,
     backgroundColor: COLORS.primary, alignItems: 'center',
   },
-  klookBtnText: { fontSize: 12, fontWeight: '700', color: 'white' },
+  klookBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.text },
 })
 
 export default function MapScreen({ places, dayNumber, active, fitKey, selectedPlaceId, focusPlaceId, allRoutes, routeCoords, routeStatus, onAddPlace, onMarkerPress, onRemove, onFocusHandled }: Props) {
@@ -661,7 +660,7 @@ export default function MapScreen({ places, dayNumber, active, fitKey, selectedP
           <TextInput
             style={styles.searchInput}
             placeholder="장소 검색"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={COLORS.textSub}
             value={query}
             onChangeText={handleQueryChange}
             returnKeyType="search"
@@ -670,12 +669,17 @@ export default function MapScreen({ places, dayNumber, active, fitKey, selectedP
           {searching
             ? <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 4 }} />
             : !!query && (
-              <TouchableOpacity onPress={() => { setQuery(''); setErrorMsg(''); setSuggestions([]); setShowSuggestions(false) }} style={styles.clearBtn}>
-                <CloseIcon size={13} />
+              <TouchableOpacity
+                onPress={() => { setQuery(''); setErrorMsg(''); setSuggestions([]); setShowSuggestions(false) }}
+                style={styles.clearBtn}
+                accessibilityRole="button"
+                accessibilityLabel="검색어 지우기"
+              >
+                <CloseIcon size={15} color={COLORS.textSub} />
               </TouchableOpacity>
             )
           }
-          <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={searching}>
+          <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={searching} accessibilityRole="button">
             <Text style={styles.searchBtnText}>검색</Text>
           </TouchableOpacity>
         </View>
@@ -724,7 +728,7 @@ export default function MapScreen({ places, dayNumber, active, fitKey, selectedP
             detail={null}
             detailLoading={false}
             actionLabel="삭제"
-            actionColor={COLORS.danger}
+            destructive
             onAction={() => { onRemove(place.id); onMarkerPress(0) }}
             onClose={() => onMarkerPress(0)}
           />
@@ -740,7 +744,6 @@ export default function MapScreen({ places, dayNumber, active, fitKey, selectedP
           detail={placeDetail}
           detailLoading={detailLoading}
           actionLabel={`+ Day ${dayNumber} 일정 추가`}
-          actionColor={COLORS.mint}
           onAction={() => {
             if (previewRequest !== previewRequestRef.current) return
             const name = placeDetail?.name || previewMarker.name
@@ -811,14 +814,13 @@ export default function MapScreen({ places, dayNumber, active, fitKey, selectedP
 
       {/* 사이드 액티비티 패널 (손잡이 포함) */}
       <View style={[act.panel, showActivities ? act.panelOpen : act.panelClosed]}>
-        {/* 손잡이 — 패널 왼쪽에 붙음.
-            보이는 폭은 36dp지만 hitSlop으로 터치는 48dp를 넘게 잡는다.
-            폭을 더 키우면 닫힌 상태에서 지도를 그만큼 더 가린다. */}
         <TouchableOpacity
           style={act.tab}
           onPress={handleToggleActivities}
           activeOpacity={0.8}
-          hitSlop={{ top: 8, bottom: 8, left: 14, right: 6 }}
+          accessibilityRole="button"
+          accessibilityLabel="주변 즐길거리"
+          accessibilityState={{ expanded: showActivities }}
         >
           <Text style={act.tabIcon}>{showActivities ? '›' : '‹'}</Text>
           <Text style={act.tabLabel}>{'즐\n길\n거\n리'}</Text>
@@ -862,7 +864,7 @@ export default function MapScreen({ places, dayNumber, active, fitKey, selectedP
 
 function PlaceSheet({
   name, address, accentColor, detail, detailLoading,
-  actionLabel, actionColor, onAction, onClose,
+  actionLabel, destructive, onAction, onClose,
 }: {
   name: string
   address: string
@@ -870,7 +872,7 @@ function PlaceSheet({
   detail: PlaceDetail | null
   detailLoading: boolean
   actionLabel: string
-  actionColor: string
+  destructive?: boolean
   onAction: () => void
   onClose: () => void
 }) {
@@ -886,8 +888,8 @@ function PlaceSheet({
           <Text style={sheet.name} numberOfLines={1}>{name}</Text>
           {!!address && <Text style={sheet.address} numberOfLines={1}>{address}</Text>}
         </View>
-        <TouchableOpacity onPress={onClose} style={sheet.closeBtn}>
-          <CloseIcon size={14} />
+        <TouchableOpacity onPress={onClose} style={sheet.closeBtn} accessibilityRole="button" accessibilityLabel="장소 정보 닫기">
+          <CloseIcon size={16} color={COLORS.textSub} />
         </TouchableOpacity>
       </View>
 
@@ -937,8 +939,8 @@ function PlaceSheet({
         </ScrollView>
       )}
 
-      <TouchableOpacity style={[sheet.actionBtn, { backgroundColor: actionColor }]} onPress={onAction}>
-        <Text style={sheet.actionText}>{actionLabel}</Text>
+      <TouchableOpacity style={[sheet.actionBtn, destructive && sheet.deleteBtn]} onPress={onAction} accessibilityRole="button">
+        <Text style={[sheet.actionText, destructive && sheet.deleteText]}>{actionLabel}</Text>
       </TouchableOpacity>
     </View>
   )
@@ -962,7 +964,7 @@ const sheet = StyleSheet.create({
   headerTexts: { flex: 1 },
   name: { fontSize: 16, fontWeight: '800', color: COLORS.text },
   address: { fontSize: 11, color: COLORS.textSub, marginTop: 2 },
-  closeBtn: { padding: 4 },
+  closeBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   loadingText: { fontSize: 12, color: COLORS.textSub },
   chips: { flexDirection: 'row', gap: 8, paddingVertical: 4, marginBottom: 12 },
@@ -973,9 +975,12 @@ const sheet = StyleSheet.create({
   },
   chipText: { fontSize: 12, fontWeight: '600', color: COLORS.text },
   actionBtn: {
-    paddingVertical: 13, borderRadius: 16, alignItems: 'center', marginTop: 4,
+    minHeight: 48, paddingVertical: 10, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 4,
+    backgroundColor: COLORS.mint,
   },
-  actionText: { color: 'white', fontSize: 14, fontWeight: '800' },
+  actionText: { color: COLORS.text, fontSize: 14, fontWeight: '800' },
+  deleteBtn: { backgroundColor: COLORS.primaryLight },
+  deleteText: { color: COLORS.primaryInk },
 })
 
 const styles = StyleSheet.create({
@@ -987,7 +992,7 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.card, borderRadius: 16,
-    paddingHorizontal: 12, paddingVertical: 10,
+    paddingHorizontal: 8, paddingVertical: 4,
     shadowColor: COLORS.text, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12, shadowRadius: 8, elevation: 5,
     borderWidth: 1.5, borderColor: 'transparent',
@@ -995,13 +1000,14 @@ const styles = StyleSheet.create({
   searchBoxError: { borderColor: COLORS.primary },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, fontWeight: '500', color: COLORS.text, padding: 0 },
-  clearBtn: { padding: 4, marginRight: 4 },
+  clearBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   searchBtn: {
     backgroundColor: COLORS.primary,
+    minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
   },
-  searchBtnText: { color: 'white', fontSize: 12, fontWeight: '700' },
-  errorText: { marginTop: 6, marginLeft: 4, fontSize: 12, color: COLORS.primary, fontWeight: '500' },
+  searchBtnText: { color: COLORS.text, fontSize: 12, fontWeight: '700' },
+  errorText: { marginTop: 6, marginLeft: 4, fontSize: 12, color: COLORS.primaryInk, fontWeight: '500' },
   suggestionsBox: {
     marginTop: 6, backgroundColor: COLORS.card, borderRadius: 16,
     shadowColor: COLORS.text, shadowOffset: { width: 0, height: 2 },
@@ -1070,6 +1076,6 @@ const styles = StyleSheet.create({
   },
   routeBannerText: { fontSize: 13, color: COLORS.textSub, fontWeight: '500' },
   routeBannerFailed: { backgroundColor: COLORS.primaryLight },
-  routeBannerFailedText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  routeBannerFailedText: { fontSize: 13, color: COLORS.primaryInk, fontWeight: '600' },
 
 })

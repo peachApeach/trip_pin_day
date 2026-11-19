@@ -94,7 +94,7 @@ export default function TripOverviewScreen({
     <View style={styles.container}>
       {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="내 여행으로 돌아가기">
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>{trip.title}</Text>
@@ -140,6 +140,8 @@ export default function TripOverviewScreen({
       >
         <TouchableOpacity
           style={[styles.dayTab, selectedDay === null && styles.dayTabActive]}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: selectedDay === null }}
           onPress={() => handleSelectDay(null)}
         >
           <Text style={[styles.dayTabText, selectedDay === null && styles.dayTabTextActive]}>전체</Text>
@@ -150,6 +152,8 @@ export default function TripOverviewScreen({
             <TouchableOpacity
               key={day}
               style={[styles.dayTab, selectedDay === day && styles.dayTabActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: selectedDay === day }}
               onPress={() => handleSelectDay(day)}
             >
               <Text style={[styles.dayTabText, selectedDay === day && styles.dayTabTextActive]}>
@@ -206,7 +210,7 @@ export default function TripOverviewScreen({
           <View style={styles.mapEmpty}>
             <Text style={styles.mapEmptyText}>이 날 장소가 없어요</Text>
             <TouchableOpacity style={styles.mapEmptyBtn} onPress={() => onEnter(selectedDay)}>
-              <Icon name="plus" size={12} color="white" />
+              <Icon name="plus" size={12} color={COLORS.text} />
             <Text style={styles.mapEmptyBtnText}>일정 추가하기</Text>
             </TouchableOpacity>
           </View>
@@ -249,19 +253,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
   backBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 48, height: 48, borderRadius: 24,
     backgroundColor: COLORS.primaryLight,
     justifyContent: 'center', alignItems: 'center',
   },
-  backIcon: { fontSize: 22, color: COLORS.primary, fontWeight: '700', lineHeight: 26 },
+  backIcon: { fontSize: 22, color: COLORS.primaryInk, fontWeight: '700', lineHeight: 26 },
   title: { flex: 1, fontSize: 18, fontWeight: '800', color: COLORS.text },
   enterBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 2,
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+    minHeight: 48, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
   },
-  enterBtnText: { color: 'white', fontSize: 12, fontWeight: '700' },
-  enterBtnArrow: { color: 'white', fontSize: 15, fontWeight: '700', marginTop: -1 },
+  enterBtnText: { color: COLORS.text, fontSize: 12, fontWeight: '700' },
+  enterBtnArrow: { color: COLORS.text, fontSize: 15, fontWeight: '700', marginTop: -1 },
 
   notifyRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -276,26 +280,26 @@ const styles = StyleSheet.create({
   notifyTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   notifySub: { fontSize: 11, color: COLORS.textSub },
 
-  dayTabsWrap: { maxHeight: 64, backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  dayTabsWrap: { flexGrow: 0, backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   dayTabs: { paddingHorizontal: 12, paddingVertical: 8, gap: 8, alignItems: 'center' },
   dayTab: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+    minHeight: 48, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 24,
     borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.card,
   },
   dayTabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   dayTabText: { fontSize: 13, fontWeight: '700', color: COLORS.textSub },
-  dayTabTextActive: { color: 'white' },
+  dayTabTextActive: { color: COLORS.text },
   dayTabDate: { fontSize: 11, color: COLORS.textSub },
-  dayTabDateActive: { color: 'rgba(255,255,255,0.8)' },
+  dayTabDateActive: { color: COLORS.text },
   dayTabBadge: {
-    width: 18, height: 18, borderRadius: 9,
+    minWidth: 18, minHeight: 18, paddingHorizontal: 4, borderRadius: 9,
     backgroundColor: COLORS.primaryLight,
     justifyContent: 'center', alignItems: 'center',
   },
   dayTabBadgeActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
-  dayTabBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.primary },
-  dayTabBadgeTextActive: { color: 'white' },
+  dayTabBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.primaryInk },
+  dayTabBadgeTextActive: { color: COLORS.text },
 
   mapWrap: {
     height: 260, margin: 16, borderRadius: 20,
@@ -312,9 +316,9 @@ const styles = StyleSheet.create({
   mapEmptyBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20,
+    minHeight: 48, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 24,
   },
-  mapEmptyBtnText: { color: 'white', fontSize: 13, fontWeight: '700' },
+  mapEmptyBtnText: { color: COLORS.text, fontSize: 13, fontWeight: '700' },
 
   placeList: { flex: 1 },
   placeListContent: { paddingHorizontal: 16, paddingBottom: 24, gap: 8 },

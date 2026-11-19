@@ -20,6 +20,7 @@ export const COLORS = {
   primary: '#FF708D',
   primaryLight: '#FFF0F3',
   primaryDark: '#E8527A',
+  primaryInk: '#A52D4D',
   mint: '#6BCDC4',
   mintLight: '#E8F7F4',
   yellow: '#FFD98B',
@@ -42,7 +43,7 @@ export const COLORS = {
   /** 별점 — 팔레트 밖이지만 별은 노란색이어야 읽힌다 */
   rating: '#E8A33D',
   /** 민트 배경 위 글씨 — 민트 자체는 흰 바탕에서도 연해서 본문엔 못 쓴다 */
-  mintDark: '#2E938A',
+  mintDark: '#17615B',
   /** 영업 중 / 종료 뱃지 */
   open: '#2E7D32',
   openBg: '#E8F5E9',

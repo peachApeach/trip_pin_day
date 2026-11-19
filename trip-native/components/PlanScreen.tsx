@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, Modal, Pressable,
+  View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, ActivityIndicator, Platform, Linking, PanResponder,
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
@@ -8,6 +8,7 @@ import { COLORS, PLACE_COLORS } from '../constants'
 import { CURRENCIES } from '../utils/currency'
 import { klookSearchUrl } from '../utils/affiliate'
 import CurrencyPicker from './CurrencyPicker'
+import DayPicker from './DayPicker'
 import Icon, { CloseIcon, type IconName } from './Icon'
 import {
   effectiveOffset, zonedWallClockToUtc, formatTimeInZone as formatTime,
@@ -66,6 +67,30 @@ function ModeIcon({ mode, size = 16, color }: { mode: TravelMode; size?: number;
   const m = TRAVEL_MODES.find(x => x.key === mode)
   if (m?.icon) return <Icon name={m.icon} size={size} color={color} />
   return <Text style={{ fontSize: size }}>{m?.emoji ?? ''}</Text>
+}
+
+function SegmentModes({ selected, onSelect }: { selected: TravelMode; onSelect: (mode: TravelMode) => void }) {
+  return (
+    <View style={styles.segModeRow}>
+      {TRAVEL_MODES.map(({ key, label }) => {
+        const active = selected === key
+        return (
+          <TouchableOpacity
+            key={key}
+            style={styles.segModeBtn}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: active }}
+            onPress={() => onSelect(key)}
+          >
+            <View style={[styles.segModeCircle, active && styles.segModeCircleActive]}>
+              <ModeIcon mode={key} size={16} color={active ? COLORS.primaryInk : COLORS.textSub} />
+            </View>
+          </TouchableOpacity>
+        )
+      })}
+    </View>
+  )
 }
 
 function addMinutes(date: Date, minutes: number) {
@@ -319,20 +344,10 @@ export default function PlanScreen({
                     <Text style={styles.tzShiftSub}>전날 도착지 대비</Text>
                   </View>
                 )}
-                <View style={styles.segModeRow}>
-                  {TRAVEL_MODES.map(m => {
-                    const isActive = (segmentModes[0] ?? travelMode) === m.key
-                    return (
-                      <TouchableOpacity
-                        key={m.key}
-                        style={[styles.segModeBtn, isActive && styles.segModeBtnActive]}
-                        onPress={() => onSegmentModeChange(-1, m.key)}
-                      >
-                        <ModeIcon mode={m.key} size={16} color={isActive ? COLORS.primary : COLORS.textSub} />
-                      </TouchableOpacity>
-                    )
-                  })}
-                </View>
+                <SegmentModes
+                  selected={segmentModes[0] ?? travelMode}
+                  onSelect={mode => onSegmentModeChange(-1, mode)}
+                />
                 {(segmentModes[0] ?? travelMode) === 'OTHER' && (
                   <View style={styles.customDurRow}>
                     <Text style={styles.customDurLabel}>소요 시간</Text>
@@ -342,7 +357,7 @@ export default function PlanScreen({
                           style={styles.customDurInput}
                           keyboardType="number-pad"
                           placeholder="0"
-                          placeholderTextColor={COLORS.textMuted}
+                          placeholderTextColor={COLORS.textSub}
                           value={segmentDurations[0] != null ? String(Math.floor(segmentDurations[0] / 60)) : ''}
                           onChangeText={v => {
                             const h = parseInt(v) || 0
@@ -358,7 +373,7 @@ export default function PlanScreen({
                           style={styles.customDurInput}
                           keyboardType="number-pad"
                           placeholder="0"
-                          placeholderTextColor={COLORS.textMuted}
+                          placeholderTextColor={COLORS.textSub}
                           value={segmentDurations[0] != null ? String(segmentDurations[0] % 60) : ''}
                           onChangeText={v => {
                             const m = Math.min(59, parseInt(v) || 0)
@@ -429,12 +444,12 @@ export default function PlanScreen({
                       <Icon name="more" size={16} color={COLORS.textMuted} style={styles.handleIcon} />
                     </View>
                     <View style={[styles.indexBadge, { backgroundColor: color.bg }]}>
-                      <Text style={[styles.indexText, { color: color.dot }]}>{index + 1}</Text>
+                      <Text style={styles.indexText}>{index + 1}</Text>
                     </View>
                     <TouchableOpacity style={styles.nameBtn} onPress={() => { onSelect(item.id); onFocusPlace(item.id); onShowMap() }}>
                       <Text style={styles.nameText} numberOfLines={1}>{item.name}</Text>
                     </TouchableOpacity>
-                    <Text style={[styles.durationChip, { color: color.dot }]}>
+                    <Text style={styles.durationChip}>
                       {formatDuration(item.duration)}
                     </Text>
                     <TouchableOpacity onPress={() => onRemove(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -484,7 +499,7 @@ export default function PlanScreen({
                             style={styles.budgetInput}
                             keyboardType="number-pad"
                             placeholder="0"
-                            placeholderTextColor={COLORS.textMuted}
+                            placeholderTextColor={COLORS.textSub}
                             value={item.budget != null ? String(item.budget) : ''}
                             onChangeText={v => onUpdateBudget(item.id, v ? parseInt(v.replace(/[^0-9]/g, '')) : undefined)}
                           />
@@ -498,8 +513,10 @@ export default function PlanScreen({
                               key={opt.value}
                               style={[
                                 styles.durationBtn,
-                                item.duration === opt.value && { backgroundColor: color.dot, borderColor: color.dot },
+                                item.duration === opt.value && styles.durationBtnActive,
                               ]}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: item.duration === opt.value }}
                               onPress={() => onUpdateDuration(item.id, opt.value)}
                             >
                               <Text style={[
@@ -555,20 +572,10 @@ export default function PlanScreen({
                       ) : null
                     })()}
                     {/* 이동수단 선택 버튼 */}
-                    <View style={styles.segModeRow}>
-                      {TRAVEL_MODES.map(m => {
-                        const isActive = (segmentModes[segOffset + index] ?? travelMode) === m.key
-                        return (
-                          <TouchableOpacity
-                            key={m.key}
-                            style={[styles.segModeBtn, isActive && styles.segModeBtnActive]}
-                            onPress={() => onSegmentModeChange(index, m.key)}
-                          >
-                            <ModeIcon mode={m.key} size={16} color={isActive ? COLORS.primary : COLORS.textSub} />
-                          </TouchableOpacity>
-                        )
-                      })}
-                    </View>
+                    <SegmentModes
+                      selected={segmentModes[segOffset + index] ?? travelMode}
+                      onSelect={mode => onSegmentModeChange(index, mode)}
+                    />
                     {/* OTHER 모드: 시간+분 입력 */}
                     {(segmentModes[segOffset + index] ?? travelMode) === 'OTHER' && (
                       <View style={styles.customDurRow}>
@@ -579,7 +586,7 @@ export default function PlanScreen({
                               style={styles.customDurInput}
                               keyboardType="number-pad"
                               placeholder="0"
-                              placeholderTextColor={COLORS.textMuted}
+                              placeholderTextColor={COLORS.textSub}
                               value={segmentDurations[segOffset + index] != null ? String(Math.floor((segmentDurations[segOffset + index] as number) / 60)) : ''}
                               onChangeText={v => {
                                 const h = parseInt(v) || 0
@@ -596,7 +603,7 @@ export default function PlanScreen({
                               style={styles.customDurInput}
                               keyboardType="number-pad"
                               placeholder="0"
-                              placeholderTextColor={COLORS.textMuted}
+                              placeholderTextColor={COLORS.textSub}
                               value={segmentDurations[segOffset + index] != null ? String((segmentDurations[segOffset + index] as number) % 60) : ''}
                               onChangeText={v => {
                                 const m = Math.min(59, parseInt(v) || 0)
@@ -689,40 +696,19 @@ export default function PlanScreen({
         </View>
       </ScrollView>
       {movingPlace && (
-        <Modal visible transparent animationType="fade" onRequestClose={closeDayPicker}>
-          <View style={styles.dayPickerOverlay}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={closeDayPicker} />
-            <View style={styles.dayPickerCard}>
-              <Text style={styles.dayPickerTitle}>날짜 이동</Text>
-              <Text style={styles.dayPickerName}>{movingPlace.name}</Text>
-              <ScrollView>
-                {dayLabels.map((label, dayIndex) => {
-                  const isCurrent = dayIndex === (movingPlace.dayIndex ?? 0)
-                  return (
-                    <TouchableOpacity
-                      key={dayIndex}
-                      style={styles.dayOption}
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: isCurrent, selected: isCurrent }}
-                      disabled={isCurrent}
-                      onPress={() => {
-                        closeDayPicker()
-                        setExpandedId(null)
-                        onUpdateDayIndex(movingPlace.id, dayIndex)
-                      }}
-                    >
-                      <Text style={[styles.dayOptionText, isCurrent && styles.dayCurrentText]}>{label}</Text>
-                      {isCurrent && <Text style={styles.dayCurrentText}>현재 날짜</Text>}
-                    </TouchableOpacity>
-                  )
-                })}
-              </ScrollView>
-              <TouchableOpacity style={styles.dayOption} onPress={closeDayPicker} accessibilityRole="button">
-                <Text style={styles.moveDayText}>취소</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+        <DayPicker
+          title="날짜 이동"
+          subtitle={movingPlace.name}
+          dayLabels={dayLabels}
+          selectedDay={movingPlace.dayIndex ?? 0}
+          onClose={closeDayPicker}
+          onSelect={dayIndex => {
+            closeDayPicker()
+            if (dayIndex === (movingPlace.dayIndex ?? 0)) return
+            setExpandedId(null)
+            onUpdateDayIndex(movingPlace.id, dayIndex)
+          }}
+        />
       )}
     </View>
   )
@@ -734,7 +720,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   emptyDesc: { fontSize: 13, color: COLORS.textSub, textAlign: 'center', lineHeight: 20 },
   emptyBtn: { marginTop: 12, backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
-  emptyBtnText: { color: 'white', fontWeight: '700', fontSize: 14 },
+  emptyBtnText: { color: COLORS.text, fontWeight: '700', fontSize: 14 },
 
   header: {
     backgroundColor: COLORS.card, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, gap: 10,
@@ -750,16 +736,16 @@ const styles = StyleSheet.create({
   dateBtnFilled: { borderColor: COLORS.mint, backgroundColor: COLORS.mintLight },
   dateBtnLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSub, marginBottom: 2 },
   dateBtnValue: { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
-  dateBtnValueFilled: { color: COLORS.mint },
+  dateBtnValueFilled: { color: COLORS.mintDark },
   dateSep: { fontSize: 16, color: COLORS.textSub },
   nightsBadge: { backgroundColor: COLORS.primaryLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
-  nightsText: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
+  nightsText: { fontSize: 11, fontWeight: '700', color: COLORS.primaryInk },
 
   timePicker: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: COLORS.primaryLight, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16,
   },
-  timePickerText: { fontSize: 17, fontWeight: '800', color: COLORS.primary },
+  timePickerText: { fontSize: 17, fontWeight: '800', color: COLORS.primaryInk },
   modeScroll: { flex: 1 },
   modeRow: { flexDirection: 'row', gap: 6 },
   modeBtn: {
@@ -770,7 +756,7 @@ const styles = StyleSheet.create({
   modeBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
   modeIcon: { fontSize: 13 },
   modeLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
-  modeLabelActive: { color: COLORS.primary },
+  modeLabelActive: { color: COLORS.primaryInk },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   loadingText: { fontSize: 12, color: COLORS.textSub },
   handleIcon: { marginHorizontal: 4 },
@@ -797,21 +783,21 @@ const styles = StyleSheet.create({
   dragName: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text },
   dragHandle: { padding: 10 },
   pickerDone: { alignSelf: 'flex-end', backgroundColor: COLORS.mint, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 10 },
-  pickerDoneText: { color: 'white', fontSize: 13, fontWeight: '700' },
+  pickerDoneText: { color: COLORS.text, fontSize: 13, fontWeight: '700' },
 
   list: { padding: 16, paddingBottom: 40 },
   timelineRow: { flexDirection: 'row', gap: 12 },
   timelineLeft: { width: 52, alignItems: 'center' },
   timeText: { fontSize: 12, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
-  dayOffsetText: { fontSize: 9, fontWeight: '700', color: COLORS.primary, marginBottom: 2 },
+  dayOffsetText: { fontSize: 9, fontWeight: '700', color: COLORS.primaryInk, marginBottom: 2 },
   dateBadgeRow: {
     marginLeft: 64, marginBottom: 4, marginTop: 2,
     alignSelf: 'flex-start',
     backgroundColor: COLORS.primaryLight, borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  dateBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
-  placeTimeDayOffset: { fontSize: 10, color: COLORS.primary, fontWeight: '700' },
+  dateBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.primaryInk },
+  placeTimeDayOffset: { fontSize: 10, color: COLORS.primaryInk, fontWeight: '700' },
   tzShiftRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap',
     backgroundColor: COLORS.yellowLight, borderRadius: 8,
@@ -836,28 +822,16 @@ const styles = StyleSheet.create({
   placeCardExpanded: { shadowOpacity: 0.12, elevation: 5 },
   placeCardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   indexBadge: { width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
-  indexText: { fontSize: 11, fontWeight: '800' },
+  indexText: { fontSize: 11, fontWeight: '800', color: COLORS.text },
   nameBtn: { flex: 1 },
   nameText: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  durationChip: { fontSize: 11, fontWeight: '700' },
+  durationChip: { fontSize: 11, fontWeight: '700', color: COLORS.textSub },
   addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   address: { flex: 1, fontSize: 11, color: COLORS.textSub },
   placeFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   placeTime: { flexShrink: 1, fontSize: 11, color: COLORS.textSub, fontWeight: '500' },
-  moveDayBtn: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 4 },
-  moveDayText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
-  dayPickerOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center',
-  },
-  dayPickerCard: { width: '86%', maxWidth: 360, maxHeight: '75%', padding: 16, borderRadius: 20, backgroundColor: COLORS.card },
-  dayPickerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
-  dayPickerName: { fontSize: 13, color: COLORS.textSub, marginTop: 4, marginBottom: 8 },
-  dayOption: {
-    minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border,
-  },
-  dayOptionText: { fontSize: 14, fontWeight: '600', color: COLORS.text },
-  dayCurrentText: { fontSize: 12, color: COLORS.textSub },
+  moveDayBtn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 4 },
+  moveDayText: { fontSize: 12, fontWeight: '700', color: COLORS.primaryInk },
 
   tourRow: { gap: 6, paddingTop: 4 },
   tourLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
@@ -865,7 +839,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16,
     borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center',
   },
-  tourBtnText: { fontSize: 12, fontWeight: '700', color: 'white' },
+  tourBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.text },
 
   durationRow: { gap: 6, paddingTop: 4 },
   durationLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
@@ -875,21 +849,23 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.surface,
   },
   durationBtnText: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },
-  durationBtnTextActive: { color: 'white' },
+  durationBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primaryInk },
+  durationBtnTextActive: { color: COLORS.primaryInk },
 
   travelCard: {
     flex: 1, gap: 8,
     backgroundColor: COLORS.surface, borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8,
+    paddingHorizontal: 8, paddingVertical: 8, marginBottom: 8,
     borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed',
   },
-  segModeRow: { flexDirection: 'row', gap: 6 },
-  segModeBtn: {
+  segModeRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  segModeBtn: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
+  segModeCircle: {
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: COLORS.card, borderWidth: 1.5, borderColor: COLORS.border,
     justifyContent: 'center', alignItems: 'center',
   },
-  segModeBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
+  segModeCircleActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primaryInk },
   customDurRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   customDurLabel: { fontSize: 12, color: COLORS.textSub, fontWeight: '500' },
   customDurFields: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -904,7 +880,7 @@ const styles = StyleSheet.create({
   segInfoEmpty: { fontSize: 11, color: COLORS.textMuted },
   travelDuration: { fontSize: 12, fontWeight: '700', color: COLORS.textSub },
   travelDistance: { fontSize: 11, color: COLORS.textMuted },
-  routeHint: { fontSize: 10, color: COLORS.primary, marginLeft: 'auto', fontWeight: '600' },
+  routeHint: { fontSize: 10, color: COLORS.primaryInk, marginLeft: 'auto', fontWeight: '600' },
 
   budgetRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -921,8 +897,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight, borderRadius: 7,
     paddingHorizontal: 7, paddingVertical: 3,
   },
-  currencyBtnText: { fontSize: 13, fontWeight: '800', color: COLORS.primary },
-  currencyBtnCode: { fontSize: 10, fontWeight: '700', color: COLORS.primary },
+  currencyBtnText: { fontSize: 13, fontWeight: '800', color: COLORS.primaryInk },
+  currencyBtnCode: { fontSize: 10, fontWeight: '700', color: COLORS.primaryInk },
   budgetInput: {
     fontSize: 15, fontWeight: '700', color: COLORS.text,
     minWidth: 70, textAlign: 'right', padding: 0,
