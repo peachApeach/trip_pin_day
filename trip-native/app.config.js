@@ -4,6 +4,19 @@ module.exports = {
     slug: 'trip-native',
     version: '1.0.0',
     orientation: 'portrait',
+
+    // EAS Update (OTA) — JS/에셋만 바뀐 변경은 재빌드 없이 기기로 내려보낸다.
+    // `eas update --branch production` 으로 올리면 앱이 다음 실행 때 받는다.
+    updates: {
+      url: 'https://u.expo.dev/4a815da3-118b-4cb2-ae45-e212c056ea8d',
+    },
+    // 네이티브 코드가 바뀌면 옛 APK가 새 JS를 못 돌리므로, 서로 맞는 것끼리만
+    // 묶여야 한다. fingerprint 정책은 네이티브 의존성·설정을 해시해서 그 판단을
+    // 자동으로 한다 — appVersion 정책처럼 version 문자열을 손으로 올리는 걸
+    // 깜빡해서 호환 안 되는 업데이트가 깔리는 사고가 없다.
+    runtimeVersion: {
+      policy: 'fingerprint',
+    },
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
     ios: {
