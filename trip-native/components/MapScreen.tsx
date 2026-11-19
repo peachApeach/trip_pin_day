@@ -8,6 +8,7 @@ import * as Location from 'expo-location'
 import { COLORS, PLACE_COLORS } from '../constants'
 import Icon, { CloseIcon } from './Icon'
 import MapPin, { categoryOf } from './MapPin'
+import { klookSearchUrl } from '../utils/affiliate'
 import { latLngParam } from '../utils/geo'
 import { mapsFetch, mapsImageSource } from '../utils/mapsApi'
 import { fetchTimeZone } from '../utils/timezone'
@@ -320,7 +321,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
   const renderActivityItem = ({ item }: { item: ActivityItem }) => {
     const stars = item.rating ? `★ ${item.rating.toFixed(1)}` : null
     const price = item.priceLevel != null ? '₩'.repeat(item.priceLevel + 1) : null
-    const klookUrl = `https://www.klook.com/ko/search/?query=${encodeURIComponent(item.name)}&af_id=PARTNER_ID`
+    const klookUrl = klookSearchUrl(item.name)
     const failed = photoFailed.includes(item.placeId)
     return (
       <TouchableOpacity style={act.card} onPress={() => handleActivityPress(item)} activeOpacity={0.75}>
@@ -353,9 +354,11 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
             </View>
           </View>
         </View>
-        <TouchableOpacity style={act.klookBtn} onPress={(e) => { e.stopPropagation(); Linking.openURL(klookUrl) }}>
-          <Text style={act.klookBtnText}>클룩에서 예약하기</Text>
-        </TouchableOpacity>
+        {!!klookUrl && (
+          <TouchableOpacity style={act.klookBtn} onPress={(e) => { e.stopPropagation(); Linking.openURL(klookUrl) }}>
+            <Text style={act.klookBtnText}>클룩에서 예약하기</Text>
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
     )
   }

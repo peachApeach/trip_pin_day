@@ -6,6 +6,7 @@ import {
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
 import { COLORS, PLACE_COLORS } from '../constants'
 import { CURRENCIES } from '../utils/currency'
+import { klookSearchUrl } from '../utils/affiliate'
 import CurrencyPicker from './CurrencyPicker'
 import Icon, { CloseIcon, type IconName } from './Icon'
 import {
@@ -78,11 +79,8 @@ function formatDuration(minutes: number) {
 
 
 
-// 제휴 링크 — 실제 파트너스 가입 후 af_id/utm 파라미터 교체
-function getKlookUrl(placeName: string) {
-  const q = encodeURIComponent(placeName)
-  return `https://www.klook.com/ko/search/?query=${q}&af_id=PARTNER_ID`
-}
+// 제휴 링크 — 실제 파트너스 가입 후 utm 파라미터 교체
+// 클룩 URL은 utils/affiliate.ts 참고 (경로를 왜 바꿨는지 주석에 있다)
 function getMrtUrl(placeName: string) {
   const q = encodeURIComponent(placeName)
   return `https://www.myrealtrip.com/offers?q=${q}&utm_source=gurmi&utm_medium=app`
@@ -396,6 +394,7 @@ export default function PlanScreen({
           const prevDOff = index === 0
             ? 0
             : dayOffsetInZone(dayBaseUtc, schedule[index - 1].fromUtc, firstPlaceOffset, schedule[index - 1].offset)
+          const tourUrl = klookSearchUrl(item.name)
           return (
             <View key={item.id}>
               {/* 장소 행 */}
@@ -499,15 +498,17 @@ export default function PlanScreen({
                           ))}
                         </View>
                       </View>
-                      <View style={styles.tourRow}>
-                        <Text style={styles.tourLabel}>이 장소 근처 투어</Text>
-                        <TouchableOpacity
-                          style={styles.tourBtn}
-                          onPress={() => Linking.openURL(getKlookUrl(item.name))}
-                        >
-                          <Text style={styles.tourBtnText}>클룩에서 찾기</Text>
-                        </TouchableOpacity>
-                      </View>
+                      {!!tourUrl && (
+                        <View style={styles.tourRow}>
+                          <Text style={styles.tourLabel}>이 장소 근처 투어</Text>
+                          <TouchableOpacity
+                            style={styles.tourBtn}
+                            onPress={() => Linking.openURL(tourUrl)}
+                          >
+                            <Text style={styles.tourBtnText}>클룩에서 찾기</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </>
                   )}
                 </TouchableOpacity>
