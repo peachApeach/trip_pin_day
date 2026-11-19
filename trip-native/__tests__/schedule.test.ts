@@ -1,8 +1,9 @@
 import {
   LEAD_MINUTES, computeDayArrivals, dayStartWallClock,
-  durationsForDay, modesForDay, segmentInputPlaces, splitDayPlaces, tripTotalDays,
+  durationsForDay, modesForDay, notificationScheduleSignature, restoreTripPlace, segmentInputPlaces, splitDayPlaces, tripTotalDays,
+  updateTripPlaces,
 } from '../utils/schedule'
-import type { Place, TravelSegment } from '../types'
+import type { Place, TravelSegment, Trip } from '../types'
 
 function place(over: Partial<Place> & { id: number }): Place {
   return {
@@ -16,6 +17,72 @@ const seg = (duration: number): TravelSegment => ({ duration, distance: '1 km', 
 /** 기기 로컬 'HH:MM' */
 const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
+describe('updateTripPlaces', () => {
+  const first = place({ id: 1 })
+  const second = place({ id: 2, dayIndex: 0 })
+  const third = place({ id: 3, dayIndex: 1 })
+  const fourth = place({ id: 4, dayIndex: 1 })
+  const fifth = place({ id: 5, dayIndex: 2 })
+  const sixth = place({ id: 6, dayIndex: 2 })
+  const trip: Trip = {
+    id: 1, title: '여행', startDate: '2026-11-19T09:00:00+09:00',
+    tripStartDate: '2026-11-19', tripEndDate: '2026-11-21', travelMode: 'DRIVING',
+    places: [first, second, third, fourth, fifth, sixth],
+    segmentModes: { 0: ['BICYCLING'], 1: ['TRANSIT', 'WALKING'], 2: ['OTHER', 'TRANSIT'] },
+    segmentDurations: { 2: [20, null] },
+  }
+
+  it('Day 2에 장소를 추가하면 그날 마지막에 붙이고 Day 3에서 바뀐 연결만 초기화한다', () => {
+    const added = place({ id: 7, dayIndex: 1 })
+    const updated = updateTripPlaces(trip, [...trip.places, added], [1])
+    expect(splitDayPlaces(updated.places, 1).dayPlaces).toEqual([third, fourth, added])
+    expect(updated.segmentModes).toEqual({
+      0: ['BICYCLING'], 1: ['TRANSIT', 'WALKING', null], 2: [null, 'TRANSIT'],
+    })
+    expect(updated.segmentDurations[2]).toEqual([null, null])
+  })
+
+  it('Day 2 첫 장소를 Day 1 끝으로 옮기면 같은 출발지와 도착지를 가진 설정만 유지한다', () => {
+    const moved = { ...third, dayIndex: 0 }
+    const updated = updateTripPlaces(trip, [first, second, fourth, fifth, sixth, moved], [1, 0])
+    expect(splitDayPlaces(updated.places, 0).dayPlaces).toEqual([first, second, moved])
+    expect(splitDayPlaces(updated.places, 1).dayPlaces).toEqual([fourth])
+    expect(updated.segmentModes).toEqual({
+      0: ['BICYCLING', 'TRANSIT'], 1: ['WALKING'], 2: ['OTHER', 'TRANSIT'],
+    })
+    expect(updated.segmentDurations[2]).toEqual([20, null])
+  })
+
+  it('삭제한 장소를 실행 취소하면 원래 순서와 연결 설정을 복구하고 이후 편집도 보존한다', () => {
+    const withoutFourth = updateTripPlaces(trip, [first, second, third, fifth, sixth], [1])
+    expect(withoutFourth.segmentModes[2]).toEqual([null, 'TRANSIT'])
+    const added = place({ id: 7, dayIndex: 2 })
+    const edited = updateTripPlaces(withoutFourth, [...withoutFourth.places, added], [2])
+    edited.segmentModes[2][1] = 'BICYCLING'
+
+    const restored = restoreTripPlace(edited, trip, fourth.id)
+    expect(splitDayPlaces(restored.places, 1).dayPlaces).toEqual([third, fourth])
+    expect(splitDayPlaces(restored.places, 2).dayPlaces).toEqual([fifth, sixth, added])
+    expect(restored.segmentModes[1]).toEqual(['TRANSIT', 'WALKING'])
+    expect(restored.segmentModes[2]).toEqual(['OTHER', 'BICYCLING', null])
+    expect(restored.segmentDurations[2]).toEqual([20, null, null])
+  })
+
+  it('같은 날짜 안에서 순서를 뒤집으면 바뀐 구간에 이전의 이동 설정을 적용하지 않는다', () => {
+    const reordered = updateTripPlaces(trip, [first, second, fourth, third, fifth, sixth], [1])
+    expect(reordered.segmentModes[1]).toEqual([null, null])
+    expect(reordered.segmentModes[2]).toEqual([null, 'TRANSIT'])
+  })
+
+  it('앱을 다시 열어도 수정한 일정과 마지막으로 예약된 일정을 구분한다', () => {
+    const scheduled: Trip = { ...trip, notifyEnabled: true, notificationScheduleSignature: notificationScheduleSignature(trip) }
+    const edited = { ...scheduled, places: scheduled.places.map(p => p.id === first.id ? { ...p, duration: 90 } : p) }
+    const loaded: Trip = JSON.parse(JSON.stringify(edited))
+    expect(notificationScheduleSignature(loaded)).not.toBe(loaded.notificationScheduleSignature)
+    expect(notificationScheduleSignature({ ...scheduled, title: '제목만 수정' })).toBe(scheduled.notificationScheduleSignature)
+  })
+})
 
 describe('LEAD_MINUTES', () => {
   it('10분이다', () => {

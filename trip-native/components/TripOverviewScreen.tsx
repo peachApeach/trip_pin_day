@@ -4,6 +4,7 @@ import MapView, { Polyline } from 'react-native-maps'
 import { COLORS, PLACE_COLORS } from '../constants'
 import Icon from './Icon'
 import MapPin from './MapPin'
+import { tripTotalDays } from '../utils/schedule'
 import type { Trip, Place } from '../types'
 
 interface Props {
@@ -24,11 +25,6 @@ function formatDate(iso: string | null, offset = 0): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-function calcDays(start: string, end: string): number {
-  const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
-  return Math.max(1, diff + 1)
-}
-
 export default function TripOverviewScreen({
   trip, onEnter, onBack,
   notifyEnabled, notifyBusy, notifyCount, onToggleNotify,
@@ -36,12 +32,13 @@ export default function TripOverviewScreen({
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const mapRef = useRef<MapView>(null)
 
-  const totalDays = trip.tripStartDate && trip.tripEndDate ? calcDays(trip.tripStartDate, trip.tripEndDate) : 1
+  const totalDays = tripTotalDays(trip.tripStartDate, trip.tripEndDate)
   const days = Array.from({ length: totalDays }, (_, i) => i)
 
+  const chronologicalPlaces = [...trip.places].sort((a, b) => (a.dayIndex ?? 0) - (b.dayIndex ?? 0))
   const visiblePlaces = selectedDay === null
-    ? trip.places
-    : trip.places.filter(p => (p.dayIndex ?? 0) === selectedDay)
+    ? chronologicalPlaces
+    : chronologicalPlaces.filter(p => (p.dayIndex ?? 0) === selectedDay)
 
   /** 그 장소가 속한 날에서 몇 번째인지. 핀에 찍히는 번호다. */
   const dayOrderOf = (place: Place) =>
@@ -221,11 +218,11 @@ export default function TripOverviewScreen({
         {visiblePlaces.length === 0 ? (
           <Text style={styles.placeEmptyText}>일정 상세에서 장소를 추가해보세요</Text>
         ) : (
-          visiblePlaces.map((place, idx) => {
-            const globalIdx = trip.places.indexOf(place)
+          visiblePlaces.map((place) => {
+            const globalIdx = chronologicalPlaces.indexOf(place)
             const color = PLACE_COLORS[globalIdx % PLACE_COLORS.length]
             return (
-              <TouchableOpacity key={place.id} style={styles.placeRow} onPress={() => onEnter(selectedDay)} activeOpacity={0.75}>
+              <TouchableOpacity key={place.id} style={styles.placeRow} onPress={() => onEnter(place.dayIndex ?? 0)} activeOpacity={0.75}>
                 <View style={[styles.placeNum, { backgroundColor: color.bg }]}>
                   <Text style={[styles.placeNumText, { color: color.dot }]}>{globalIdx + 1}</Text>
                 </View>

@@ -105,10 +105,10 @@ export interface ScheduleResult {
  * 여행의 모든 장소에 대해 도착 10분 전 알림을 예약한다.
  * 기존 예약은 지우고 다시 깔기 때문에 여러 번 불러도 중복되지 않는다.
  */
-export async function scheduleTripNotifications(trip: Trip): Promise<ScheduleResult> {
-  await cancelTripNotifications(trip.id)
-
+export async function scheduleTripNotifications(trip: Trip, isCurrent: () => boolean): Promise<ScheduleResult | null> {
   const arrivals = await computeTripArrivals(trip)
+  if (!isCurrent()) return null
+  await cancelTripNotifications(trip.id)
   // 지금보다 과거인 알림은 OS가 즉시 발사해버리므로 걸러낸다
   const now = Date.now()
   let skippedPast = 0
@@ -119,6 +119,7 @@ export async function scheduleTripNotifications(trip: Trip): Promise<ScheduleRes
   const sorted = [...arrivals].sort((a, b) => a.localTime.getTime() - b.localTime.getTime())
 
   for (const { place, dayIndex, localTime } of sorted) {
+    if (!isCurrent()) return null
     const fireAt = new Date(localTime.getTime() - LEAD_MINUTES * 60000)
     if (fireAt.getTime() <= now) { skippedPast++; continue }
     if (scheduled >= MAX_PENDING) { droppedOverLimit++; continue }

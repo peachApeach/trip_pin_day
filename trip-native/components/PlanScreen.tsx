@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
+  View, Text, TextInput, TouchableOpacity, ScrollView, Modal, Pressable,
   StyleSheet, ActivityIndicator, Platform, Linking, PanResponder,
 } from 'react-native'
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
@@ -17,6 +17,7 @@ import type { Place, TravelMode, TravelSegment } from '../types'
 
 interface Props {
   places: Place[]
+  dayLabels: string[]
   selectedPlaceId: number | null
   onSelect: (id: number) => void
   onRemove: (id: number) => void
@@ -87,7 +88,7 @@ function getMrtUrl(placeName: string) {
 }
 
 export default function PlanScreen({
-  places, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onUpdateDayIndex,
+  places, dayLabels, selectedPlaceId, onSelect, onRemove, onUpdateDuration, onUpdateDayIndex,
   onReorder, onSegmentModeChange, onSegmentDurationChange, onSegmentPress,
   prevDayLastPlace, onShowMap, onFocusPlace,
   startDate, onStartDateChange, travelMode,
@@ -96,10 +97,13 @@ export default function PlanScreen({
 }: Props) {
   const [pickerMode, setPickerMode] = useState<boolean>(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [movingPlaceId, setMovingPlaceId] = useState<number | null>(null)
   const [currencyPickerId, setCurrencyPickerId] = useState<number | null>(null)
   const [dragOrder, setDragOrder] = useState<number[] | null>(null)
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
   const [dragOffsetY, setDragOffsetY] = useState(0)
+  const movingPlace = places.find(place => place.id === movingPlaceId)
+  const closeDayPicker = () => setMovingPlaceId(null)
 
   const dragOrderRef = useRef<number[] | null>(null)
   dragOrderRef.current = dragOrder
@@ -452,6 +456,16 @@ export default function PlanScreen({
                         <Text style={styles.placeTimeDayOffset}> ({dayOffsetLabel(dOffTo)})</Text>
                       )}
                     </Text>
+                    {dayLabels.length > 1 && (
+                      <TouchableOpacity
+                        style={styles.moveDayBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${item.name} 날짜 이동`}
+                        onPress={() => setMovingPlaceId(item.id)}
+                      >
+                        <Text style={styles.moveDayText}>날짜 이동</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {/* 체류시간 + 예산 + 투어 버튼 (펼쳐졌을 때) */}
@@ -667,13 +681,49 @@ export default function PlanScreen({
             <View style={[styles.timelineDot, { backgroundColor: COLORS.mint }]} />
           </View>
           <View style={styles.endCard}>
-            <Text style={styles.endCardText}>여행 종료</Text>
+            <Text style={styles.endCardText}>이날 일정 종료</Text>
             <Text style={styles.endCardSub}>
               {formatTime(dayBaseUtc, firstPlaceOffset)} ~ {formatTime(endTimeUtc, lastPlaceOffset)}
             </Text>
           </View>
         </View>
       </ScrollView>
+      {movingPlace && (
+        <Modal visible transparent animationType="fade" onRequestClose={closeDayPicker}>
+          <View style={styles.dayPickerOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeDayPicker} />
+            <View style={styles.dayPickerCard}>
+              <Text style={styles.dayPickerTitle}>날짜 이동</Text>
+              <Text style={styles.dayPickerName}>{movingPlace.name}</Text>
+              <ScrollView>
+                {dayLabels.map((label, dayIndex) => {
+                  const isCurrent = dayIndex === (movingPlace.dayIndex ?? 0)
+                  return (
+                    <TouchableOpacity
+                      key={dayIndex}
+                      style={styles.dayOption}
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: isCurrent, selected: isCurrent }}
+                      disabled={isCurrent}
+                      onPress={() => {
+                        closeDayPicker()
+                        setExpandedId(null)
+                        onUpdateDayIndex(movingPlace.id, dayIndex)
+                      }}
+                    >
+                      <Text style={[styles.dayOptionText, isCurrent && styles.dayCurrentText]}>{label}</Text>
+                      {isCurrent && <Text style={styles.dayCurrentText}>현재 날짜</Text>}
+                    </TouchableOpacity>
+                  )
+                })}
+              </ScrollView>
+              <TouchableOpacity style={styles.dayOption} onPress={closeDayPicker} accessibilityRole="button">
+                <Text style={styles.moveDayText}>취소</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   )
 }
@@ -792,8 +842,22 @@ const styles = StyleSheet.create({
   durationChip: { fontSize: 11, fontWeight: '700' },
   addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   address: { flex: 1, fontSize: 11, color: COLORS.textSub },
-  placeFooter: { flexDirection: 'row', alignItems: 'center' },
-  placeTime: { fontSize: 11, color: COLORS.textSub, fontWeight: '500' },
+  placeFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  placeTime: { flexShrink: 1, fontSize: 11, color: COLORS.textSub, fontWeight: '500' },
+  moveDayBtn: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 4 },
+  moveDayText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  dayPickerOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center',
+  },
+  dayPickerCard: { width: '86%', maxWidth: 360, maxHeight: '75%', padding: 16, borderRadius: 20, backgroundColor: COLORS.card },
+  dayPickerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
+  dayPickerName: { fontSize: 13, color: COLORS.textSub, marginTop: 4, marginBottom: 8 },
+  dayOption: {
+    minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border,
+  },
+  dayOptionText: { fontSize: 14, fontWeight: '600', color: COLORS.text },
+  dayCurrentText: { fontSize: 12, color: COLORS.textSub },
 
   tourRow: { gap: 6, paddingTop: 4 },
   tourLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSub },

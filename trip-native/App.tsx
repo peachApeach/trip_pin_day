@@ -14,6 +14,9 @@ import { fetchTravelSegments, fetchSegment } from './utils/distanceMatrix'
 import { fetchRoute, fetchAllRoutes } from './utils/directions'
 import { fetchTimeZone, type TimeZoneInfo } from './utils/timezone'
 import {
+  notificationScheduleSignature, restoreTripPlace, segmentInputPlaces, splitDayPlaces, tripTotalDays, updateTripPlaces,
+} from './utils/schedule'
+import {
   configureNotificationHandler, ensureNotificationPermission,
   scheduleTripNotifications, cancelTripNotifications, countScheduledNotifications,
 } from './utils/notifications'
@@ -24,6 +27,8 @@ configureNotificationHandler()
 
 export default function App() {
   const [trips, setTrips] = useState<Trip[]>([])
+  const tripsRef = useRef(trips)
+  tripsRef.current = trips
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
   const [overviewTrip, setOverviewTrip] = useState<Trip | null>(null)
   const [activeDayIndex, setActiveDayIndex] = useState<number>(0)
@@ -31,6 +36,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('map')
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
   const [focusPlaceId, setFocusPlaceId] = useState<number | null>(null)
+  const [deletedPlace, setDeletedPlace] = useState<{ id: number; name: string; trip: Trip } | null>(null)
   const [travelSegments, setTravelSegments] = useState<(TravelSegment | null)[]>([])
   const [segmentsLoading, setSegmentsLoading] = useState(false)
   const [allRoutes, setAllRoutes] = useState<{ latitude: number; longitude: number }[][]>([])
@@ -39,12 +45,24 @@ export default function App() {
   const routeGenRef = useRef(0)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fetchGenRef = useRef(0)
+  const lastPlaceIdRef = useRef(0)
   // 알림은 여행별로 따로 켜고 끈다. 둘 다 여행 id로 키를 잡는다.
   const [notifyBusyIds, setNotifyBusyIds] = useState<number[]>([])
   const [notifyCounts, setNotifyCounts] = useState<Record<number, number>>({})
   const notifyGenRef = useRef<Record<number, number>>({})
   // 렌더를 기다리지 않고 바로 읽어야 하는 쪽(effect)을 위한 사본
   const notifyBusyRef = useRef<Set<number>>(new Set())
+  const notifyQueueRef = useRef(new Map<number, Promise<void>>())
+  const notifyFeedbackRef = useRef(new Set<number>())
+
+  const queueNotificationWork = useCallback((id: number, work: () => Promise<void>) => {
+    const queue = notifyQueueRef.current
+    const pending = (queue.get(id) ?? Promise.resolve()).then(work).catch(() => {})
+    queue.set(id, pending)
+    void pending.then(() => {
+      if (queue.get(id) === pending) queue.delete(id)
+    })
+  }, [])
 
   useEffect(() => {
     if (!activeTrip && !overviewTrip) return
@@ -83,7 +101,6 @@ export default function App() {
           ),
         }))
         setTrips(fixed)
-        AsyncStorage.setItem('trips', JSON.stringify(fixed)).catch(() => {})
 
         // 시간대 정보(timeZoneId / utcOffsetMinutes) 없는 장소들 Timezone API로 일괄 채우기.
         // timeZoneId가 있어야 여행 날짜 기준으로 서머타임을 반영할 수 있다.
@@ -102,17 +119,15 @@ export default function App() {
           })).then(results => {
             const updates = results.filter((r): r is { tripId: number; placeId: number } & TimeZoneInfo => r !== null)
             if (updates.length === 0) return
-            setTrips(prev => {
-              const next = prev.map(t => ({
+            setTrips(prev =>
+              prev.map(t => ({
                 ...t,
                 places: t.places.map(p => {
                   const u = updates.find(r => r.tripId === t.id && r.placeId === p.id)
                   return u ? { ...p, utcOffsetMinutes: u.utcOffsetMinutes, timeZoneId: u.timeZoneId } : p
                 }),
               }))
-              AsyncStorage.setItem('trips', JSON.stringify(next)).catch(() => {})
-              return next
-            })
+            )
           })
         }
       }
@@ -126,17 +141,19 @@ export default function App() {
   }, [trips, loaded])
 
   useEffect(() => {
-    const dayPlaces = (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex)
-    const prevPlaces = activeDayIndex > 0 ? (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
-    const prevLast = prevPlaces.length > 0 ? prevPlaces[prevPlaces.length - 1] : null
-    const currentPlaces = prevLast ? [prevLast, ...dayPlaces] : dayPlaces
+    const { dayPlaces, prevDayLastPlace } = splitDayPlaces(activeTrip?.places ?? [], activeDayIndex)
+    const currentPlaces = segmentInputPlaces(dayPlaces, prevDayLastPlace)
     const currentMode = activeTrip?.travelMode ?? 'DRIVING'
     const raw = (activeTrip?.segmentModes ?? {})[activeDayIndex]
     const currentSegmentModes: (TravelMode | null)[] = Array.isArray(raw) ? raw : []
-    if (currentPlaces.length < 2) { setTravelSegments([]); return }
     const gen = ++fetchGenRef.current
-    console.log('[App] trigger gen:', gen, 'places:', currentPlaces.length, 'segmentModes:', JSON.stringify(currentSegmentModes))
     if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (currentPlaces.length < 2) {
+      setTravelSegments([])
+      setSegmentsLoading(false)
+      return
+    }
+    console.log('[App] trigger gen:', gen, 'places:', currentPlaces.length, 'segmentModes:', JSON.stringify(currentSegmentModes))
     debounceRef.current = setTimeout(async () => {
       setSegmentsLoading(true)
       const rawDur = (activeTrip?.segmentDurations ?? {})[activeDayIndex]
@@ -153,42 +170,65 @@ export default function App() {
   }, [activeTrip, activeDayIndex])
 
   useEffect(() => {
-    const dayPlaces = (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex)
-    const prevPlaces = activeDayIndex > 0 ? (activeTrip?.places ?? []).filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
-    const prevLast = prevPlaces.length > 0 ? prevPlaces[prevPlaces.length - 1] : null
-    const currentPlaces = prevLast ? [prevLast, ...dayPlaces] : dayPlaces
+    const { dayPlaces, prevDayLastPlace } = splitDayPlaces(activeTrip?.places ?? [], activeDayIndex)
+    const currentPlaces = segmentInputPlaces(dayPlaces, prevDayLastPlace)
     const currentMode = activeTrip?.travelMode ?? 'DRIVING'
     const raw = (activeTrip?.segmentModes ?? {})[activeDayIndex]
     const currentSegmentModes: (TravelMode | null)[] = Array.isArray(raw) ? raw : []
     setAllRoutes([])
-    if (currentPlaces.length < 2) return
     const gen = ++routeGenRef.current
+    if (currentPlaces.length < 2) return
     fetchAllRoutes(currentPlaces, currentMode, currentSegmentModes).then(routes => {
       if (routeGenRef.current !== gen) return
       setAllRoutes(routes)
     })
   }, [activeTrip, activeDayIndex])
 
+  const activeTripId = activeTrip?.id
   const updateTrip = useCallback((updater: (t: Trip) => Trip) => {
-    setActiveTrip((prev) => prev ? updater(prev) : prev)
-    setTrips((prev) => prev.map((t) => activeTrip && t.id === activeTrip.id ? updater(t) : t))
-  }, [activeTrip])
+    if (activeTripId === undefined) return
+    setActiveTrip(prev => prev?.id === activeTripId ? updater(prev) : prev)
+    setOverviewTrip(prev => prev?.id === activeTripId ? updater(prev) : prev)
+    setTrips(prev => prev.map(t => t.id === activeTripId ? updater(t) : t))
+  }, [activeTripId])
 
-  const handleMapPress = useCallback((info: { lat: number; lng: number; name: string; address: string; utcOffsetMinutes?: number; timeZoneId?: string }) => {
-    updateTrip((t) => ({
-      ...t,
-      places: [...t.places, {
-        id: Date.now(), name: info.name, lat: info.lat, lng: info.lng, address: info.address,
-        duration: 60, dayIndex: activeDayIndex,
-        utcOffsetMinutes: info.utcOffsetMinutes, timeZoneId: info.timeZoneId,
-      }],
-    }))
+  const handleAddMapPlace = useCallback((info: Pick<Place, 'lat' | 'lng' | 'name' | 'address'>) => {
+    const id = Math.max(Date.now(), lastPlaceIdRef.current + 1)
+    lastPlaceIdRef.current = id
+    const place: Place = { ...info, id, duration: 60, dayIndex: activeDayIndex }
+    updateTrip(t => updateTripPlaces(t, [...t.places, place], [activeDayIndex]))
+
+    void fetchTimeZone(info.lat, info.lng, Math.floor(id / 1000)).then(tz => {
+      if (!tz) return
+      updateTrip(t => ({
+        ...t,
+        places: t.places.map(p => p.id === id ? { ...p, ...tz } : p),
+      }))
+    })
   }, [updateTrip, activeDayIndex])
 
   const handleRemove = useCallback((id: number) => {
-    updateTrip((t) => ({ ...t, places: t.places.filter((p) => p.id !== id) }))
+    const removed = activeTrip?.places.find(place => place.id === id)
+    if (!activeTrip || !removed) return
+    setDeletedPlace({ id, name: removed.name, trip: activeTrip })
+    updateTrip(t => {
+      const place = t.places.find(p => p.id === id)
+      return place ? updateTripPlaces(t, t.places.filter(p => p.id !== id), [place.dayIndex ?? 0]) : t
+    })
     setSelectedPlaceId((prev) => prev === id ? null : prev)
-  }, [updateTrip])
+  }, [activeTrip, updateTrip])
+
+  useEffect(() => {
+    if (!deletedPlace) return
+    const timer = setTimeout(() => setDeletedPlace(null), 10000)
+    return () => clearTimeout(timer)
+  }, [deletedPlace])
+
+  const handleUndoRemove = () => {
+    if (!deletedPlace || deletedPlace.trip.id !== activeTripId) return
+    updateTrip(t => restoreTripPlace(t, deletedPlace.trip, deletedPlace.id))
+    setDeletedPlace(null)
+  }
 
   const handleUpdateName = useCallback((id: number, name: string) => {
     updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, name } : p) }))
@@ -206,14 +246,33 @@ export default function App() {
     updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, budgetCurrency } : p) }))
   }, [updateTrip])
 
+  const handleDayChange = useCallback((dayIndex: number) => {
+    setActiveDayIndex(dayIndex)
+    setSelectedPlaceId(null)
+    setTravelSegments([])
+    setAllRoutes([])
+    setRouteCoords([])
+    setRouteStatus('idle')
+  }, [])
+
   const handleUpdateDayIndex = useCallback((id: number, dayIndex: number) => {
-    updateTrip((t) => ({ ...t, places: t.places.map((p) => p.id === id ? { ...p, dayIndex } : p) }))
-  }, [updateTrip])
+    updateTrip(t => {
+      const place = t.places.find(p => p.id === id)
+      if (!place || (place.dayIndex ?? 0) === dayIndex) return t
+      const places = t.places.filter(p => p.id !== id)
+      places.push({ ...place, dayIndex })
+      return updateTripPlaces(t, places, [place.dayIndex ?? 0, dayIndex])
+    })
+    handleDayChange(dayIndex)
+  }, [updateTrip, handleDayChange])
 
   const handleReorderPlaces = useCallback((dayIndex: number, reordered: Place[]) => {
-    updateTrip((t) => {
+    const order = new Map(reordered.map((place, index) => [place.id, index]))
+    updateTrip(t => {
+      const { dayPlaces } = splitDayPlaces(t.places, dayIndex)
+      dayPlaces.sort((a, b) => (order.get(a.id) ?? reordered.length) - (order.get(b.id) ?? reordered.length))
       const others = t.places.filter(p => (p.dayIndex ?? 0) !== dayIndex)
-      return { ...t, places: [...others, ...reordered] }
+      return updateTripPlaces(t, [...others, ...dayPlaces], [dayIndex])
     })
   }, [updateTrip])
 
@@ -298,12 +357,11 @@ export default function App() {
 
   const handleDeleteTrip = (id: number) => {
     setTrips((prev) => prev.filter((t) => t.id !== id))
-    // 여행이 사라졌는데 알림만 남아 울리면 안 된다.
-    // 세대를 올려두면 진행 중인 예약이 끝날 때 스스로 뒷정리를 한다.
     notifyGenRef.current[id] = (notifyGenRef.current[id] ?? 0) + 1
+    notifyFeedbackRef.current.delete(id)
     setNotifyBusy(id, false)
     setNotifyCounts(prev => { const next = { ...prev }; delete next[id]; return next })
-    cancelTripNotifications(id).catch(() => {})
+    queueNotificationWork(id, () => cancelTripNotifications(id))
   }
 
   const handleEditTrip = (id: number, title: string, tripStartDate: string | null, tripEndDate: string | null, budgets: import('./types').BudgetItem[]) => {
@@ -348,46 +406,6 @@ export default function App() {
     setTrips(prev => prev.map(t => t.id === id ? { ...t, title, tripStartDate, tripEndDate, budgets } : t))
   }
 
-  // 일정을 고치면 예약해둔 알림이 과거 계산값으로 남는다. 알림이 켜진 여행은
-  // 시각에 영향을 주는 필드가 바뀔 때마다 다시 깐다. 여행별로 서명을 따로 들고
-  // 비교해서 (1) 관계없는 변경(제목, 예산 등)과 (2) 다른 여행의 변경에는
-  // 재예약하지 않는다.
-  const notifySigs = Object.fromEntries(
-    trips
-      .filter(t => t.notifyEnabled)
-      .map(t => [t.id, JSON.stringify([
-        t.startDate, t.tripStartDate, t.tripEndDate, t.travelMode,
-        t.places.map(p => [p.id, p.dayIndex ?? 0, p.duration, p.lat, p.lng, p.name, p.timeZoneId]),
-        t.segmentModes, t.segmentDurations,
-      ])])
-  )
-  const notifySigKey = JSON.stringify(notifySigs)
-  const notifySigRef = useRef<Record<number, string> | null>(null)
-  useEffect(() => {
-    if (!loaded) return
-    const prevSigs = notifySigRef.current
-    notifySigRef.current = notifySigs
-    // 첫 렌더에서는 기준값만 기록하고 재예약하지 않는다 (앱 켤 때마다 네트워크 호출 방지)
-    if (prevSigs === null) return
-
-    // 알림을 새로 켠 여행은 handleToggleNotify가 이미 예약했으므로 제외한다
-    // (prevSigs에 없던 id = 방금 켜진 여행)
-    const stale = trips.filter(t =>
-      t.notifyEnabled && prevSigs[t.id] !== undefined && prevSigs[t.id] !== notifySigs[t.id]
-    )
-    if (stale.length === 0) return
-
-    const timer = setTimeout(async () => {
-      for (const t of stale) {
-        try {
-          const { scheduled } = await scheduleTripNotifications(t)
-          setNotifyCounts(prev => ({ ...prev, [t.id]: scheduled }))
-        } catch { /* 다음 변경 때 다시 시도된다 */ }
-      }
-    }, 1500)
-    return () => clearTimeout(timer)
-  }, [notifySigKey, loaded])
-
   // 저장된 notifyEnabled와 OS 상태가 어긋날 수 있다(권한 회수, 앱 재설치 등).
   // 화면에 보여줄 숫자는 OS에 실제로 걸린 것을 신뢰한다.
   const notifyEnabledKey = trips.map(t => `${t.id}:${t.notifyEnabled ? 1 : 0}`).join(',')
@@ -398,7 +416,12 @@ export default function App() {
     // 방금 계산한 숫자를 덮어쓰면 안 된다.
     const targets = trips.filter(t => t.notifyEnabled && !notifyBusyRef.current.has(t.id))
     Promise.all(targets.map(async t => [t.id, await countScheduledNotifications(t.id)] as const))
-      .then(pairs => { if (alive) setNotifyCounts(prev => ({ ...prev, ...Object.fromEntries(pairs) })) })
+      .then(pairs => {
+        if (alive) {
+          const idlePairs = pairs.filter(([id]) => !notifyBusyRef.current.has(id))
+          setNotifyCounts(prev => ({ ...prev, ...Object.fromEntries(idlePairs) }))
+        }
+      })
       .catch(() => {})
     return () => { alive = false }
   }, [loaded, notifyEnabledKey])
@@ -409,77 +432,105 @@ export default function App() {
     setNotifyBusyIds(prev => busy ? [...new Set([...prev, id])] : prev.filter(x => x !== id))
   }, [])
 
+  const pendingSchedules = trips.flatMap(trip => {
+    if (!trip.notifyEnabled) return []
+    const signature = notificationScheduleSignature(trip)
+    return signature === trip.notificationScheduleSignature ? [] : [{ id: trip.id, signature }]
+  })
+  const pendingScheduleKey = JSON.stringify(pendingSchedules)
+
+  useEffect(() => {
+    if (!loaded || pendingSchedules.length === 0) return
+    const timer = setTimeout(() => {
+      for (const { id, signature } of pendingSchedules) {
+        const generation = notifyGenRef.current[id]
+        queueNotificationWork(id, async () => {
+          const isCurrent = () => {
+            const latest = tripsRef.current.find(t => t.id === id)
+            return notifyGenRef.current[id] === generation && !!latest?.notifyEnabled
+              && notificationScheduleSignature(latest) === signature
+          }
+          const trip = tripsRef.current.find(t => t.id === id)
+          if (!trip || !isCurrent() || trip.notificationScheduleSignature === signature) return
+
+          setNotifyBusy(id, true)
+          setTrips(prev => prev.map(t => t.id === id && t.notificationScheduleSignature !== undefined
+            ? { ...t, notificationScheduleSignature: undefined }
+            : t
+          ))
+          try {
+            const result = await scheduleTripNotifications(trip, isCurrent)
+            if (!result || !isCurrent()) return
+            setTrips(prev => prev.map(t => t.id === id && t.notifyEnabled && notificationScheduleSignature(t) === signature
+              ? { ...t, notificationScheduleSignature: signature }
+              : t
+            ))
+            const { scheduled, skippedPast, droppedOverLimit } = result
+            setNotifyCounts(prev => ({ ...prev, [id]: scheduled }))
+            if (!notifyFeedbackRef.current.delete(id)) return
+            if (scheduled === 0) {
+              Alert.alert('예약할 알림이 없어요', skippedPast > 0
+                ? `일정 ${skippedPast}개가 모두 지난 시각이에요.`
+                : '알림을 걸 일정을 찾지 못했어요.')
+            } else if (skippedPast > 0 || droppedOverLimit > 0) {
+              const notes = [`${scheduled}개 예약했어요.`]
+              if (skippedPast > 0) notes.push(`이미 지난 일정 ${skippedPast}개는 건너뛰었어요.`)
+              if (droppedOverLimit > 0) notes.push(`기기 한도 때문에 먼 일정 ${droppedOverLimit}개는 제외했어요.`)
+              Alert.alert('알림 설정 완료', notes.join('\n'))
+            }
+          } catch {
+            if (isCurrent() && notifyFeedbackRef.current.delete(id)) {
+              Alert.alert('알림 설정 실패', '앱을 다시 열면 알림 예약을 다시 시도합니다.')
+            }
+          } finally {
+            if (notifyGenRef.current[id] === generation) setNotifyBusy(id, false)
+          }
+        })
+      }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [loaded, pendingScheduleKey, queueNotificationWork, setNotifyBusy])
+
   const handleToggleNotify = useCallback(async (tripId: number, enabled: boolean) => {
-    // 토글이 빠르게 번갈아 눌릴 때 늦게 끝난 호출이 결과를 덮어쓰지 않도록
     const gen = (notifyGenRef.current[tripId] ?? 0) + 1
     notifyGenRef.current[tripId] = gen
-    const isStale = () => notifyGenRef.current[tripId] !== gen
 
     const persist = (on: boolean) => {
-      setTrips(prev => prev.map(t => t.id === tripId ? { ...t, notifyEnabled: on } : t))
-      setOverviewTrip(prev => prev && prev.id === tripId ? { ...prev, notifyEnabled: on } : prev)
+      setTrips(prev => prev.map(t => t.id === tripId
+        ? { ...t, notifyEnabled: on, notificationScheduleSignature: undefined }
+        : t
+      ))
+      setOverviewTrip(prev => prev?.id === tripId ? { ...prev, notifyEnabled: on } : prev)
     }
 
     if (!enabled) {
       persist(false)
+      notifyFeedbackRef.current.delete(tripId)
       setNotifyCounts(prev => ({ ...prev, [tripId]: 0 }))
       setNotifyBusy(tripId, false)
-      await cancelTripNotifications(tripId).catch(() => {})
+      queueNotificationWork(tripId, () => cancelTripNotifications(tripId))
       return
     }
 
-    const trip = trips.find(t => t.id === tripId)
+    const trip = tripsRef.current.find(t => t.id === tripId)
     if (!trip) return
     if (trip.places.length === 0) {
       Alert.alert('일정이 비어 있어요', '장소를 먼저 추가해주세요.')
       return
     }
 
+    setNotifyBusy(tripId, true)
     const granted = await ensureNotificationPermission().catch(() => false)
+    if (notifyGenRef.current[tripId] !== gen) return
     if (!granted) {
+      setNotifyBusy(tripId, false)
       Alert.alert('알림 권한이 필요해요', '설정 → 구르미 → 알림에서 권한을 켜주세요.')
       return
     }
-    if (isStale()) return
 
+    notifyFeedbackRef.current.add(tripId)
     persist(true)
-    setNotifyBusy(tripId, true)
-    try {
-      const { scheduled, skippedPast, droppedOverLimit } = await scheduleTripNotifications(trip)
-      // 예약하는 동안 껐거나 여행을 지웠다면, 방금 깐 알림을 되돌린다
-      if (isStale()) {
-        await cancelTripNotifications(tripId).catch(() => {})
-        return
-      }
-      setNotifyCounts(prev => ({ ...prev, [tripId]: scheduled }))
-      if (scheduled === 0) {
-        Alert.alert(
-          '예약할 알림이 없어요',
-          skippedPast > 0
-            ? `일정 ${skippedPast}개가 모두 지난 시각이에요.`
-            : '알림을 걸 일정을 찾지 못했어요.'
-        )
-      } else {
-        const notes = [
-          skippedPast > 0 ? `이미 지난 일정 ${skippedPast}개는 건너뛰었어요.` : null,
-          droppedOverLimit > 0 ? `기기 한도 때문에 먼 일정 ${droppedOverLimit}개는 제외했어요.` : null,
-        ].filter(Boolean)
-        if (notes.length > 0) {
-          Alert.alert('알림 설정 완료', [`${scheduled}개 예약했어요.`, ...notes].join('\n'))
-        }
-      }
-    } catch {
-      if (!isStale()) {
-        persist(false)
-        setNotifyCounts(prev => ({ ...prev, [tripId]: 0 }))
-        Alert.alert('알림 설정 실패', '잠시 후 다시 시도해주세요.')
-      }
-    } finally {
-      // 세대가 바뀌었다면 뒤에 들어온 호출이 busy를 관리한다.
-      // 단, 끄기/삭제로 세대가 올라간 경우엔 그쪽에서 이미 내려놨다.
-      if (!isStale()) setNotifyBusy(tripId, false)
-    }
-  }, [trips, setNotifyBusy])
+  }, [queueNotificationWork, setNotifyBusy])
 
   const handleSelectTrip = (trip: Trip) => {
     setActiveTrip(null)
@@ -543,19 +594,11 @@ export default function App() {
 
   if (!activeTrip) return null
 
-  const allPlaces = activeTrip.places
-  const places = allPlaces.filter(p => (p.dayIndex ?? 0) === activeDayIndex)
-  const prevDayPlaces = activeDayIndex > 0 ? allPlaces.filter(p => (p.dayIndex ?? 0) === activeDayIndex - 1) : []
-  const prevDayLastPlace = prevDayPlaces.length > 0 ? prevDayPlaces[prevDayPlaces.length - 1] : null
+  const { dayPlaces: places, prevDayLastPlace } = splitDayPlaces(activeTrip.places, activeDayIndex)
   const startDate = new Date(activeTrip.startDate)
   const travelMode = activeTrip.travelMode
 
-  function calcTotalDays(start: string | null, end: string | null) {
-    if (!start || !end) return 1
-    const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
-    return Math.max(1, diff + 1)
-  }
-  const totalDays = calcTotalDays(activeTrip.tripStartDate, activeTrip.tripEndDate)
+  const totalDays = tripTotalDays(activeTrip.tripStartDate, activeTrip.tripEndDate)
 
   function formatDayDate(dayIdx: number) {
     if (!activeTrip!.tripStartDate) return `Day ${dayIdx + 1}`
@@ -585,7 +628,7 @@ export default function App() {
           <View style={styles.dayNav}>
             <TouchableOpacity
               style={[styles.dayNavBtn, activeDayIndex === 0 && styles.dayNavBtnDisabled]}
-              onPress={() => { if (activeDayIndex > 0) { setActiveDayIndex(activeDayIndex - 1); setSelectedPlaceId(null) } }}
+              onPress={() => handleDayChange(activeDayIndex - 1)}
               disabled={activeDayIndex === 0}
             >
               <Text style={styles.dayNavArrow}>‹</Text>
@@ -596,7 +639,7 @@ export default function App() {
             </View>
             <TouchableOpacity
               style={[styles.dayNavBtn, activeDayIndex === totalDays - 1 && styles.dayNavBtnDisabled]}
-              onPress={() => { if (activeDayIndex < totalDays - 1) { setActiveDayIndex(activeDayIndex + 1); setSelectedPlaceId(null) } }}
+              onPress={() => handleDayChange(activeDayIndex + 1)}
               disabled={activeDayIndex === totalDays - 1}
             >
               <Text style={styles.dayNavArrow}>›</Text>
@@ -608,6 +651,7 @@ export default function App() {
           <View style={[styles.mapWrapper, activeTab !== 'map' && { display: 'none' }]}>
             <MapScreen
               places={places}
+              dayNumber={activeDayIndex + 1}
               active={activeTab === 'map'}
               fitKey={`${activeTrip.id}-${activeDayIndex}`}
               selectedPlaceId={selectedPlaceId}
@@ -615,7 +659,7 @@ export default function App() {
               allRoutes={allRoutes}
               routeCoords={routeCoords}
               routeStatus={routeStatus}
-              onMapPress={handleMapPress}
+              onAddPlace={handleAddMapPlace}
               onMarkerPress={(id) => { setSelectedPlaceId(id || null); setRouteCoords([]); setRouteStatus('idle') }}
               onFocusHandled={() => setFocusPlaceId(null)}
               onRemove={handleRemove}
@@ -632,10 +676,13 @@ export default function App() {
             <SwipeDayWrapper
               activeDayIndex={activeDayIndex}
               totalDays={totalDays}
-              onDayChange={(idx) => { setActiveDayIndex(idx); setSelectedPlaceId(null) }}
+              onDayChange={handleDayChange}
             >
               <PlanScreen
                 places={places}
+                dayLabels={Array.from({ length: totalDays }, (_, day) =>
+                  activeTrip.tripStartDate ? `Day ${day + 1} · ${formatDayDate(day)}` : `Day ${day + 1}`
+                )}
                 selectedPlaceId={selectedPlaceId}
                 onSelect={setSelectedPlaceId}
                 onRemove={handleRemove}
@@ -661,6 +708,17 @@ export default function App() {
             </SwipeDayWrapper>
           )}
         </View>
+
+        {deletedPlace?.trip.id === activeTrip.id && (
+          <View style={styles.undoBar}>
+            <Text style={styles.undoMessage} numberOfLines={2} accessibilityLiveRegion="polite">
+              {deletedPlace.name} 삭제됨
+            </Text>
+            <TouchableOpacity style={styles.undoButton} onPress={handleUndoRemove} accessibilityRole="button">
+              <Text style={styles.undoAction}>실행 취소</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.tabBar}>
           {TABS.map((tab) => (
@@ -763,6 +821,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1, shadowRadius: 8, elevation: 4,
   },
   mapHintText: { fontSize: 13, color: COLORS.textSub, fontWeight: '500' },
+  undoBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 8,
+    borderRadius: 12, paddingLeft: 14, paddingRight: 4, backgroundColor: COLORS.text,
+  },
+  undoMessage: { flex: 1, color: 'white', fontSize: 13 },
+  undoButton: { justifyContent: 'center', minHeight: 44, paddingHorizontal: 12 },
+  undoAction: { color: COLORS.primaryLight, fontSize: 13, fontWeight: '800' },
   tabBar: {
     flexDirection: 'row', backgroundColor: COLORS.card,
     paddingBottom: Platform.OS === 'ios' ? 8 : 4, paddingTop: 8,

@@ -1,8 +1,17 @@
 import { effectiveOffset, toZonedDate, zonedWallClockToUtc } from './timezone'
-import type { Place, TravelMode, TravelSegment } from '../types'
+import type { Place, TravelMode, TravelSegment, Trip } from '../types'
 
 /** 알림을 일정 시각보다 얼마나 앞서 보낼지 (분) */
 export const LEAD_MINUTES = 10
+
+export function notificationScheduleSignature(trip: Trip): string {
+  const places = [...trip.places].sort((a, b) => (a.dayIndex ?? 0) - (b.dayIndex ?? 0))
+  return JSON.stringify([
+    trip.startDate, trip.tripStartDate, trip.tripEndDate, trip.travelMode,
+    places.map(p => [p.id, p.dayIndex ?? 0, p.duration, p.lat, p.lng, p.name, p.address, p.timeZoneId, p.utcOffsetMinutes]),
+    trip.segmentModes, trip.segmentDurations,
+  ])
+}
 
 export interface ArrivalItem {
   place: Place
@@ -90,6 +99,55 @@ export function splitDayPlaces(places: Place[], dayIndex: number) {
 /** fetchTravelSegments에 넘길 장소 배열 (전날 마지막 장소를 앞에 붙인 형태) */
 export function segmentInputPlaces(dayPlaces: Place[], prevDayLastPlace: Place | null): Place[] {
   return prevDayLastPlace ? [prevDayLastPlace, ...dayPlaces] : dayPlaces
+}
+
+/** 장소가 바뀌어도 같은 출발지와 도착지 사이의 이동 설정을 유지한다. */
+export function updateTripPlaces(trip: Trip, places: Place[], changedDays: number[], undoSnapshot?: Trip): Trip {
+  const segmentModes = { ...trip.segmentModes }
+  const segmentDurations = { ...trip.segmentDurations }
+  const affectedDays = new Set(changedDays.flatMap(day => [day, day + 1]))
+  const segmentKeys = (items: Place[], day: number) => {
+    const { dayPlaces, prevDayLastPlace } = splitDayPlaces(items, day)
+    const route = segmentInputPlaces(dayPlaces, prevDayLastPlace)
+    return route.slice(1).map((to, index) => `${route[index].id}:${to.id}`)
+  }
+  const previousSettings = new Map<string, { mode: TravelMode | null; duration: number | null }>()
+  for (const source of undoSnapshot ? [undoSnapshot, trip] : [trip]) {
+    for (const day of affectedDays) {
+      segmentKeys(source.places, day).forEach((key, index) => {
+        previousSettings.set(key, {
+          mode: source.segmentModes?.[day]?.[index] ?? null,
+          duration: source.segmentDurations?.[day]?.[index] ?? null,
+        })
+      })
+    }
+  }
+  for (const day of affectedDays) {
+    const settings = segmentKeys(places, day).map(key => previousSettings.get(key))
+    const modes = settings.map(setting => setting?.mode ?? null)
+    const durations = settings.map(setting => setting?.duration ?? null)
+    if (segmentModes[day] || modes.some(mode => mode !== null)) segmentModes[day] = modes
+    if (segmentDurations[day] || durations.some(duration => duration !== null)) segmentDurations[day] = durations
+  }
+  return { ...trip, places, segmentModes, segmentDurations }
+}
+
+export function restoreTripPlace(trip: Trip, undoSnapshot: Trip, placeId: number): Trip {
+  const place = undoSnapshot.places.find(p => p.id === placeId)
+  if (!place || trip.places.some(p => p.id === placeId)) return trip
+
+  const day = place.dayIndex ?? 0
+  if (day >= tripTotalDays(trip.tripStartDate, trip.tripEndDate)) return trip
+  const original = splitDayPlaces(undoSnapshot.places, day).dayPlaces
+  const originalIndex = original.indexOf(place)
+  const { dayPlaces } = splitDayPlaces(trip.places, day)
+  const nextIndex = dayPlaces.findIndex(p => p.id === original[originalIndex + 1]?.id)
+  const previousIndex = dayPlaces.findIndex(p => p.id === original[originalIndex - 1]?.id)
+  const index = nextIndex >= 0 ? nextIndex : previousIndex >= 0 ? previousIndex + 1 : originalIndex
+  dayPlaces.splice(index, 0, place)
+
+  const otherDays = trip.places.filter(p => (p.dayIndex ?? 0) !== day)
+  return updateTripPlaces(trip, [...otherDays, ...dayPlaces], [day], undoSnapshot)
 }
 
 /** 여행의 총 일수 */

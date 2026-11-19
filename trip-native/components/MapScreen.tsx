@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useCallback, useRef, useState, useEffect } from 'react'
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, Keyboard, FlatList, ScrollView, Linking, Dimensions, Image,
@@ -11,7 +11,6 @@ import MapPin, { categoryOf } from './MapPin'
 import { klookSearchUrl } from '../utils/affiliate'
 import { latLngParam } from '../utils/geo'
 import { mapsFetch, mapsImageSource } from '../utils/mapsApi'
-import { fetchTimeZone } from '../utils/timezone'
 import type { Place } from '../types'
 
 interface ActivityItem {
@@ -41,6 +40,7 @@ interface PlaceDetail {
 
 interface Props {
   places: Place[]
+  dayNumber: number
   active: boolean
   /** 이 값이 바뀌면 전체 경로에 맞춰 카메라를 다시 맞춘다 (여행·Day 전환). */
   fitKey: string
@@ -49,7 +49,7 @@ interface Props {
   allRoutes: { latitude: number; longitude: number }[][]
   routeCoords: { latitude: number; longitude: number }[]
   routeStatus: 'idle' | 'loading' | 'ok' | 'failed'
-  onMapPress: (info: { lat: number; lng: number; name: string; address: string; utcOffsetMinutes?: number; timeZoneId?: string }) => void
+  onAddPlace: (info: Pick<Place, 'lat' | 'lng' | 'name' | 'address'>) => void
   onMarkerPress: (id: number) => void
   onRemove: (id: number) => void
   /** 한 장소로 이동을 끝냈음을 알린다. 안 비우면 이후 전체 경로 맞추기가 계속 막힌다. */
@@ -142,10 +142,10 @@ const act = StyleSheet.create({
   klookBtnText: { fontSize: 12, fontWeight: '700', color: 'white' },
 })
 
-export default function MapScreen({ places, active, fitKey, selectedPlaceId, focusPlaceId, allRoutes, routeCoords, routeStatus, onMapPress, onMarkerPress, onRemove, onFocusHandled }: Props) {
+export default function MapScreen({ places, dayNumber, active, fitKey, selectedPlaceId, focusPlaceId, allRoutes, routeCoords, routeStatus, onAddPlace, onMarkerPress, onRemove, onFocusHandled }: Props) {
   const mapRef = useRef<MapView>(null)
   const markerPressedRef = useRef(false)
-  const geocodeIdRef = useRef(0)
+  const previewRequestRef = useRef(0)
   const mapReadyRef = useRef(false)
   // 이 fitKey에 대해 자동 맞추기가 아직 유효한지. 사용자가 지도를 조작하면 해제한다.
   const autoFitKeyRef = useRef<string | null>(null)
@@ -173,10 +173,6 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
       animated: true,
     })
   }
-
-  useEffect(() => {
-    if (selectedPlaceId) setPreviewMarker(null)
-  }, [selectedPlaceId])
 
   useEffect(() => {
     if (!focusPlaceId) return
@@ -260,6 +256,23 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
   // 사진을 못 불러온 장소. 깨진 아이콘 대신 자리표시로 바꾼다.
   const [photoFailed, setPhotoFailed] = useState<string[]>([])
 
+  const clearPreview = useCallback(() => {
+    const request = ++previewRequestRef.current
+    setPreviewMarker(null)
+    setPlaceDetail(null)
+    setDetailLoading(false)
+    return request
+  }, [])
+
+  useEffect(() => {
+    clearPreview()
+    return () => { previewRequestRef.current++ }
+  }, [fitKey, clearPreview])
+
+  useEffect(() => {
+    if (selectedPlaceId) clearPreview()
+  }, [selectedPlaceId, clearPreview])
+
   const fetchActivities = async () => {
     setActivitiesLoading(true)
     setActivities([])
@@ -303,19 +316,9 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
     }
   }
 
-  const handleActivityPress = async (item: ActivityItem) => {
+  const handleActivityPress = (item: ActivityItem) => {
     setShowActivities(false)
-    onMarkerPress(0)
-    setDetailLoading(true)
-    setPlaceDetail(null)
-    const detail = await fetchPlaceDetail(item.placeId)
-    setDetailLoading(false)
-    if (!detail) return
-    setPreviewMarker(detail)
-    mapRef.current?.animateToRegion({
-      latitude: detail.lat, longitude: detail.lng,
-      latitudeDelta: 0.01, longitudeDelta: 0.01,
-    }, 500)
+    void showPlacePreview(item.placeId)
   }
 
   const renderActivityItem = ({ item }: { item: ActivityItem }) => {
@@ -383,7 +386,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
     } catch {}
   }
 
-  const fetchPlaceDetail = async (placeId: string): Promise<SearchResult | null> => {
+  const fetchPlaceDetail = async (placeId: string): Promise<(PlaceDetail & SearchResult) | null> => {
     try {
       // types는 핀 색을 카테고리별로 고르기 위해 받는다 (Basic Data라 과금 변화 없음)
       const fields = 'name,geometry,formatted_address,types,rating,user_ratings_total,price_level,opening_hours,formatted_phone_number'
@@ -398,7 +401,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
       const weekdayTexts: string[] | undefined = r.opening_hours?.weekday_text
       const todayHours = weekdayTexts?.[todayIdx === 0 ? 6 : todayIdx - 1]?.replace(/^[^:]+:\s*/, '') ?? undefined
 
-      setPlaceDetail({
+      return {
         placeId,
         name: r.name ?? '',
         address: r.formatted_address ?? '',
@@ -410,57 +413,46 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
         openNow: r.opening_hours?.open_now,
         todayHours,
         phone: r.formatted_phone_number,
-      })
-
-      return {
-        name: r.name ?? '',
-        address: r.formatted_address ?? '',
-        lat: r.geometry.location.lat,
-        lng: r.geometry.location.lng,
         types: r.types ?? [],
       }
     } catch { return null }
   }
 
   const fetchDetailByLatLng = async (lat: number, lng: number, name: string) => {
-    setDetailLoading(true)
-    setPlaceDetail(null)
     try {
       // Nearby Search로 가장 가까운 place_id 찾기
       const location = latLngParam(lat, lng)
-      if (location == null) { setPlaceDetail({ placeId: '', name, address: '', lat, lng }); return }
+      if (location == null) return null
       const nearbyRes = await mapsFetch('/place/nearbysearch/json', {
         location, rankby: 'distance', keyword: name, language: 'ko',
       })
       const nearbyData = await nearbyRes.json()
       const placeId = nearbyData?.results?.[0]?.place_id
-      if (placeId) {
-        await fetchPlaceDetail(placeId)
-      } else {
-        setPlaceDetail({ placeId: '', name, address: '', lat, lng })
-      }
-    } catch {
-      setPlaceDetail({ placeId: '', name, address: '', lat, lng })
-    } finally {
-      setDetailLoading(false)
-    }
+      return placeId ? await fetchPlaceDetail(placeId) : null
+    } catch { return null }
   }
 
-  const handleSuggestionSelect = async (item: { placeId: string; description: string }) => {
-    setShowSuggestions(false)
-    setQuery(item.description)
-    Keyboard.dismiss()
+  const showPlacePreview = async (placeId: string) => {
     onMarkerPress(0)
+    const request = clearPreview()
     setDetailLoading(true)
-    setPlaceDetail(null)
-    const detail = await fetchPlaceDetail(item.placeId)
+    const detail = await fetchPlaceDetail(placeId)
+    if (request !== previewRequestRef.current) return
     setDetailLoading(false)
     if (!detail) return
+    setPlaceDetail(detail)
     setPreviewMarker(detail)
     mapRef.current?.animateToRegion(
       { latitude: detail.lat, longitude: detail.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
       600
     )
+  }
+
+  const handleSuggestionSelect = (item: { placeId: string; description: string }) => {
+    setShowSuggestions(false)
+    setQuery(item.description)
+    Keyboard.dismiss()
+    void showPlacePreview(item.placeId)
   }
 
   const handleQueryChange = (text: string) => {
@@ -539,6 +531,7 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
     setShowModal(false)
     setQuery('')
     onMarkerPress(0)
+    clearPreview()
     setPreviewMarker(result)
     mapRef.current?.animateToRegion(
       { latitude: result.lat, longitude: result.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 },
@@ -546,24 +539,22 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
     )
   }
 
-  const handlePoiClick = (e: PoiClickEvent) => {
+  const handlePoiClick = async (e: PoiClickEvent) => {
     if (showModal) return
     setShowSuggestions(false)
     // 지도 탭과 같게 — 첫 탭은 패널을 치우는 데만 쓴다
     if (showActivities) { setShowActivities(false); return }
     const { coordinate, name, placeId } = e.nativeEvent
-    setPreviewMarker({ lat: coordinate.latitude, lng: coordinate.longitude, name, address: '' })
+    onMarkerPress(0)
+    const request = clearPreview()
+    const marker = { lat: coordinate.latitude, lng: coordinate.longitude, name, address: '' }
+    setPreviewMarker(marker)
     setDetailLoading(true)
-    setPlaceDetail(null)
-    if (placeId) {
-      fetchPlaceDetail(placeId).then((detail) => {
-        setDetailLoading(false)
-        // 좌표는 탭한 자리를 그대로 두고 카테고리(핀 색)만 채운다
-        if (detail?.types) setPreviewMarker((prev) => prev && { ...prev, types: detail.types })
-      })
-    } else {
-      fetchDetailByLatLng(coordinate.latitude, coordinate.longitude, name).then(() => setDetailLoading(false))
-    }
+    const detail = placeId ? await fetchPlaceDetail(placeId) : await fetchDetailByLatLng(marker.lat, marker.lng, name)
+    if (request !== previewRequestRef.current) return
+    setDetailLoading(false)
+    setPlaceDetail(detail)
+    if (detail?.types) setPreviewMarker({ ...marker, types: detail.types })
   }
 
   const handleMapPress = async (e: MapPressEvent) => {
@@ -575,22 +566,23 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
     // 패널을 치우려던 손짓이 엉뚱한 미리보기를 띄운다.
     if (showActivities) { setShowActivities(false); return }
     onMarkerPress(0)
-    setPlaceDetail(null)
+    const request = clearPreview()
     const { latitude, longitude } = e.nativeEvent.coordinate
     setPreviewMarker({ lat: latitude, lng: longitude, name: '선택한 장소', address: '' })
-    const id = ++geocodeIdRef.current
     try {
       const latlng = latLngParam(latitude, longitude)
       if (latlng == null) return
       const res = await mapsFetch('/geocode/json', { latlng, language: 'ko' })
       const data = await res.json()
-      if (id !== geocodeIdRef.current) return
+      if (request !== previewRequestRef.current) return
       const result = data?.results?.[0]
       const name: string = result?.address_components?.[0]?.long_name ?? '선택한 장소'
       const address: string = result?.formatted_address ?? ''
       setPreviewMarker({ lat: latitude, lng: longitude, name, address })
     } catch {}
   }
+
+  const previewRequest = previewRequestRef.current
 
   return (
     <View style={styles.container}>
@@ -651,12 +643,11 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
               onPress={() => {
                 markerPressedRef.current = true
                 setTimeout(() => { markerPressedRef.current = false }, 300)
-                geocodeIdRef.current++
+                clearPreview()
                 // 빈 지도를 누른 것과 달리 핀을 콕 집었으면 그 장소를 보려는
                 // 것이므로, 패널만 닫고 끝내지 않고 선택까지 진행한다.
                 setShowActivities(false)
                 onMarkerPress(place.id)
-                setPreviewMarker(null)
               }}
             />
           )
@@ -748,23 +739,18 @@ export default function MapScreen({ places, active, fitKey, selectedPlaceId, foc
           accentColor={COLORS.mint}
           detail={placeDetail}
           detailLoading={detailLoading}
-          actionLabel="+ 일정 추가"
+          actionLabel={`+ Day ${dayNumber} 일정 추가`}
           actionColor={COLORS.mint}
-          onAction={async () => {
+          onAction={() => {
+            if (previewRequest !== previewRequestRef.current) return
             const name = placeDetail?.name || previewMarker.name
             const address = placeDetail?.address || previewMarker.address
             const lat = previewMarker.lat
             const lng = previewMarker.lng
-            setPreviewMarker(null)
-            setPlaceDetail(null)
-            const tz = await fetchTimeZone(lat, lng, Math.floor(Date.now() / 1000))
-            onMapPress({
-              lat, lng, name, address,
-              utcOffsetMinutes: tz?.utcOffsetMinutes,
-              timeZoneId: tz?.timeZoneId,
-            })
+            clearPreview()
+            onAddPlace({ lat, lng, name, address })
           }}
-          onClose={() => { setPreviewMarker(null); setPlaceDetail(null) }}
+          onClose={clearPreview}
         />
       )}
 

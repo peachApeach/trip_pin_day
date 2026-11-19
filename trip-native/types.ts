@@ -16,6 +16,8 @@ export interface Trip {
   budgets?: BudgetItem[]
   /** 일정 10분 전 알림 켜짐 여부 (없으면 꺼진 것으로 본다) */
   notifyEnabled?: boolean
+  /** OS에 마지막으로 예약을 완료한 일정의 서명 */
+  notificationScheduleSignature?: string
 }
 
 export interface Place {
